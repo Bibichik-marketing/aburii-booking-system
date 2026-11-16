@@ -1,4 +1,5 @@
 "use client";
+import { useLanguage } from "@/lib/language";
 import { useEffect, useState } from "react";
 import type { z } from "zod";
 import type { configSchema } from "@/lib/schema";
@@ -28,8 +29,8 @@ type Data = {
   bookings: Booking[];
   notifications: { queued?: number; failed?: number };
 };
-const displayTime = (s: string) =>
-  new Intl.DateTimeFormat("en-MY", {
+const formatTime = (s: string, locale: string) =>
+  new Intl.DateTimeFormat(locale, {
     timeZone: "Asia/Kuala_Lumpur",
     hour: "numeric",
     minute: "2-digit",
@@ -51,6 +52,8 @@ const transitions: Record<string, string[]> = {
   seated: ["completed", "cancelled", "no_show"],
 };
 export default function Staff() {
+  const { t, locale, errorText } = useLanguage();
+  const displayTime = (value: string) => formatTime(value, locale);
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -141,22 +144,24 @@ export default function Staff() {
   return (
     <main id="main" className="staff-main">
       {checking ? (
-        <p className="notice">Checking your session…</p>
+        <p className="notice">{t("Checking your session…")}</p>
       ) : !data ? (
         <form className="booking-panel login" onSubmit={login}>
-          <span className="eyebrow">ABURII · STAFF ACCESS</span>
+          <span className="eyebrow">{t("ABURII · STAFF ACCESS")}</span>
           <h1 style={{ marginTop: 20 }}>
-            A warm welcome
+            {t("A warm welcome")}
             <br />
-            <em>starts with you.</em>
+            <em>{t("starts with you.")}</em>
           </h1>
-          <p className="field-note">Sign in with your Aburii staff account.</p>
+          <p className="field-note">
+            {t("Sign in with your Aburii staff account.")}
+          </p>
           <label>
-            Email
+            {t("Email")}
             <input type="email" name="email" autoComplete="username" required />
           </label>
           <label>
-            Password
+            {t("Password")}
             <input
               type="password"
               name="password"
@@ -167,11 +172,11 @@ export default function Staff() {
           </label>
           {error && (
             <p role="alert" className="error">
-              {error}
+              {errorText(error)}
             </p>
           )}
           <button className="button submit" disabled={busy}>
-            {busy ? "Signing in…" : "Sign in"} <span>↗</span>
+            {busy ? t("Signing in…") : t("Sign in")} <span>↗</span>
           </button>
         </form>
       ) : (
@@ -179,11 +184,12 @@ export default function Staff() {
           <div className="staff-title">
             <div>
               <span className="eyebrow">
-                SERVICE, WITH CARE · {data.role.toUpperCase()}
+                {t("SERVICE, WITH CARE · ")}
+                {t(data.role)}
               </span>
-              <h1>Reservation desk</h1>
+              <h1>{t("Reservation desk")}</h1>
               <p className="field-note">
-                All times in Malaysia time · refreshes every minute
+                {t("All times in Malaysia time · refreshes every minute")}
               </p>
             </div>
             <div className="staff-actions">
@@ -193,14 +199,14 @@ export default function Staff() {
                   void load().catch(() => setError("Unable to refresh."))
                 }
               >
-                ↻ Refresh
+                {t("↻ Refresh")}
               </button>
               {data.role === "admin" && (
                 <button
                   className="secondary"
                   onClick={() => setSettings(!settings)}
                 >
-                  {settings ? "Close settings" : "Booking settings"}
+                  {settings ? t("Close settings") : t("Booking settings")}
                 </button>
               )}
               <button
@@ -208,18 +214,18 @@ export default function Staff() {
                 disabled={busy}
                 onClick={() => action({ action: "logout" })}
               >
-                Sign out
+                {t("Sign out")}
               </button>
             </div>
           </div>
           {error && (
             <p className="error" role="alert">
-              {error}
+              {errorText(error)}
             </p>
           )}
           {message && (
             <p className="field-note" role="status">
-              {message}
+              {t(message)}
             </p>
           )}
           {settings && data.role === "admin" && (
@@ -234,7 +240,7 @@ export default function Staff() {
           )}
           <div className="dashboard-stats">
             <Stat
-              title="RESERVATIONS"
+              title={t("RESERVATIONS")}
               value={
                 today.filter(
                   (b) =>
@@ -245,7 +251,7 @@ export default function Staff() {
               }
             />
             <Stat
-              title="EXPECTED GUESTS"
+              title={t("EXPECTED GUESTS")}
               value={today
                 .filter((b) =>
                   ["confirmed", "seated", "completed"].includes(
@@ -255,13 +261,13 @@ export default function Staff() {
                 .reduce((a, b) => a + b.guests, 0)}
             />
             <Stat
-              title="AWAITING CONFIRMATION"
+              title={t("AWAITING CONFIRMATION")}
               value={
                 today.filter((b) => effectiveStatus(b) === "pending").length
               }
             />
             <Stat
-              title="PRIVATE ROOMS"
+              title={t("PRIVATE ROOMS")}
               value={
                 today.filter(
                   (b) =>
@@ -275,16 +281,20 @@ export default function Staff() {
           </div>
           {data.notifications.failed !== undefined && (
             <p className={data.notifications.failed ? "error" : "field-note"}>
-              WhatsApp delivery queue: {data.notifications.queued} waiting ·{" "}
-              {data.notifications.failed} exhausted retries.{" "}
+              {t("WhatsApp delivery queue: ")}
+              {data.notifications.queued}
+              {t(" waiting ·")} {data.notifications.failed}
+              {t(" exhausted retries.")}{" "}
               {data.notifications.failed
-                ? "Check the notification worker and provider before resending manually."
+                ? t(
+                    "Check the notification worker and provider before resending manually.",
+                  )
                 : ""}
             </p>
           )}
           <div className="toolbar">
             <label>
-              Service date
+              {t("Service date")}
               <input
                 type="date"
                 value={date}
@@ -293,20 +303,20 @@ export default function Staff() {
               />
             </label>
             <label>
-              Dining area
+              {t("Dining area")}
               <select value={area} onChange={(e) => setArea(e.target.value)}>
-                <option value="all">All areas</option>
-                <option value="counter">Counter Seating</option>
-                <option value="private">Private Room</option>
+                <option value="all">{t("All areas")}</option>
+                <option value="counter">{t("Counter Seating")}</option>
+                <option value="private">{t("Private Room")}</option>
               </select>
             </label>
             <label>
-              Status
+              {t("Status")}
               <select
                 value={status}
                 onChange={(e) => setStatus(e.target.value)}
               >
-                <option value="all">All statuses</option>
+                <option value="all">{t("All statuses")}</option>
                 {[
                   "pending",
                   "confirmed",
@@ -317,36 +327,41 @@ export default function Staff() {
                   "expired",
                   "no_show",
                 ].map((s) => (
-                  <option key={s}>{s}</option>
+                  <option key={s} value={s}>
+                    {t(s)}
+                  </option>
                 ))}
               </select>
             </label>
             <label>
-              Find a reservation
+              {t("Find a reservation")}
               <input
                 type="search"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Name, phone or reference"
+                placeholder={t("Name, phone or reference")}
               />
             </label>
           </div>
           <div className="booking-list">
             {items.length === 0 ? (
               <div className="empty-state">
-                <h2>A clear service book.</h2>
-                <p>No reservations match these filters.</p>
+                <h2>{t("A clear service book.")}</h2>
+                <p>{t("No reservations match these filters.")}</p>
               </div>
             ) : (
               items.map((b) => (
                 <article className="reservation" key={b.id}>
                   <div>
                     <span className={`badge ${effectiveStatus(b)}`}>
-                      {effectiveStatus(b).replace("_", " ")}
+                      {t(effectiveStatus(b))}
                     </span>
                     <h3>
                       {b.name}{" "}
-                      <span className="small">· {b.guests} guests</span>
+                      <span className="small">
+                        · {b.guests}
+                        {t(" guests")}
+                      </span>
                     </h3>
                     <span className="reference">{b.reference}</span>
                     <p>
@@ -365,18 +380,22 @@ export default function Staff() {
                     </h3>
                     <p>
                       {b.area === "counter"
-                        ? "Counter Seating"
-                        : "Private Room"}
+                        ? t("Counter Seating")
+                        : t("Private Room")}
                       {b.room &&
                         ` · ${data.config.rooms.find((r) => r.id === b.room)?.name || b.room}`}
                     </p>
                     {b.minimum_spend > 0 && (
                       <p>
-                        Minimum spend RM {Number(b.minimum_spend).toFixed(2)}
+                        {t("Minimum spend RM ")}
+                        {Number(b.minimum_spend).toFixed(2)}
                       </p>
                     )}
                     {effectiveStatus(b) === "pending" && (
-                      <p>Hold expires {displayTime(b.expires_at)}</p>
+                      <p>
+                        {t("Hold expires ")}
+                        {displayTime(b.expires_at)}
+                      </p>
                     )}
                     {b.capacity_committed &&
                       [
@@ -388,14 +407,14 @@ export default function Staff() {
                       ].includes(effectiveStatus(b)) && (
                         <p>
                           <strong>
-                            Capacity remains occupied until{" "}
+                            {t("Capacity remains occupied until")}{" "}
                             {displayTime(b.ends_at)}.
                           </strong>
                         </p>
                       )}
                     {b.requests && (
                       <p>
-                        <strong>Requests:</strong> {b.requests}
+                        <strong>{t("Requests:")}</strong> {b.requests}
                       </p>
                     )}
                   </div>
@@ -415,16 +434,16 @@ export default function Staff() {
                           }
                         >
                           {s === "confirmed"
-                            ? "Confirm"
+                            ? t("Confirm")
                             : s === "declined"
-                              ? "Decline"
+                              ? t("Decline")
                               : s === "seated"
-                                ? "Seat guests"
+                                ? t("Seat guests")
                                 : s === "completed"
-                                  ? "Complete"
+                                  ? t("Complete")
                                   : s === "no_show"
-                                    ? "No-show"
-                                    : "Cancel"}
+                                    ? t("No-show")
+                                    : t("Cancel")}
                         </button>
                       ))}
                     </div>
@@ -432,9 +451,11 @@ export default function Staff() {
                       new Date(b.starts_at).getTime() > Date.now() &&
                       ["pending", "confirmed"].includes(effectiveStatus(b)) && (
                         <label style={{ marginTop: 16 }}>
-                          Internal room assignment
+                          {t("Internal room assignment")}
                           <select
-                            aria-label={`Assign room for ${b.reference}`}
+                            aria-label={t("Assign room for {reference}", {
+                              reference: b.reference,
+                            })}
                             disabled={busy}
                             value={b.room || ""}
                             onChange={(e) =>
@@ -451,7 +472,9 @@ export default function Staff() {
                               )
                               .map((r) => (
                                 <option key={r.id} value={r.id}>
-                                  {r.name} · up to {r.capacity}
+                                  {r.name}
+                                  {t(" · up to ")}
+                                  {r.capacity}
                                 </option>
                               ))}
                           </select>
@@ -484,6 +507,7 @@ function Settings({
   busy: boolean;
   save: (c: Config) => Promise<void>;
 }) {
+  const { t, errorText } = useLanguage();
   const [c, setC] = useState<Config>(data.config);
   const [rooms, setRooms] = useState(JSON.stringify(c.rooms, null, 2));
   const [services, setServices] = useState(JSON.stringify(c.services, null, 2));
@@ -509,37 +533,34 @@ function Settings({
       const { configSchema } = await import("@/lib/schema");
       const result = configSchema.safeParse(config);
       if (!result.success)
-        throw Error(
-          result.error.issues
-            .map((i) => `${i.path.join(".")}: ${i.message}`)
-            .join("; "),
-        );
+        throw Error("Please check the settings and JSON format.");
       await save(result.data);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Invalid settings");
+      setError("Please check the settings and JSON format.");
     }
   }
   return (
     <form className="settings" onSubmit={submit}>
-      <span className="eyebrow">ADMINISTRATION</span>
-      <h2>Shape your service</h2>
+      <span className="eyebrow">{t("ADMINISTRATION")}</span>
+      <h2>{t("Shape your service")}</h2>
       <p className="notice">
-        New installations start closed. Enter verified inventory and service
-        times before enabling bookings. Inventory changes are blocked while
-        active reservations remain. Existing bookings retain their dining
-        duration and minimum spend.
+        {t(
+          "New installations start closed. Enter verified inventory and service times before enabling bookings. Inventory changes are blocked while active reservations remain. Existing bookings retain their dining duration and minimum spend.",
+        )}
       </p>
       <div className="settings-grid">
         {(["counter", "private"] as const).map((a) => (
           <div key={a}>
-            <h3>{a === "counter" ? "Counter Seating" : "Private Room"}</h3>
+            <h3>
+              {a === "counter" ? t("Counter Seating") : t("Private Room")}
+            </h3>
             <label className="checkbox">
               <input
                 type="checkbox"
                 checked={c[a].enabled}
                 onChange={(e) => setArea(a, "enabled", e.target.checked)}
               />
-              <span>Enable online availability</span>
+              <span>{t("Enable online availability")}</span>
             </label>
             {(a === "counter"
               ? ["capacity", "min", "max", "duration", "minimumSpend"]
@@ -548,11 +569,11 @@ function Settings({
               <label key={k}>
                 {
                   {
-                    capacity: "Total counter seats",
-                    min: "Minimum guests",
-                    max: "Maximum guests",
-                    duration: "Dining duration (minutes)",
-                    minimumSpend: "Minimum spend (RM per booking)",
+                    capacity: t("Total counter seats"),
+                    min: t("Minimum guests"),
+                    max: t("Maximum guests"),
+                    duration: t("Dining duration (minutes)"),
+                    minimumSpend: t("Minimum spend (RM per booking)"),
                   }[k]
                 }
                 <input
@@ -588,9 +609,9 @@ function Settings({
           <label key={k}>
             {
               {
-                noticeMinutes: "Advance notice (minutes)",
-                advanceDays: "Booking horizon (days)",
-                holdMinutes: "Pending capacity hold (minutes)",
+                noticeMinutes: t("Advance notice (minutes)"),
+                advanceDays: t("Booking horizon (days)"),
+                holdMinutes: t("Pending capacity hold (minutes)"),
               }[k]
             }
             <input
@@ -606,57 +627,58 @@ function Settings({
           </label>
         ))}
       </div>
-      <h3>Private-room inventory</h3>
+      <h3>{t("Private-room inventory")}</h3>
       <p className="field-note">
-        One object per room: id, name, capacity, enabled. These details are
-        visible only to staff. Example structure:{" "}
-        {`[{"id":"room-a","name":"Room A","capacity":6,"enabled":true}]`}.
-        Example capacity is illustrative.
+        {t(
+          "One object per room: id, name, capacity, enabled. These details are visible only to staff. Example structure:",
+        )}{" "}
+        {t('[{"id":"room-a","name":"Room A","capacity":6,"enabled":true}]')}
+        {t(". Example capacity is illustrative.")}
       </p>
       <textarea
-        aria-label="Private room inventory JSON"
+        aria-label={t("Private room inventory JSON")}
         rows={7}
         value={rooms}
         onChange={(e) => setRooms(e.target.value)}
       />
-      <h3>Available booking times</h3>
+      <h3>{t("Available booking times")}</h3>
       <p className="field-note">
-        Each entry has area, times and either day (0 Sunday – 6 Saturday) or
-        date (YYYY-MM-DD). A date-specific entry replaces weekly times for that
-        area. Use an empty times array to close a date. Times are in MYT.
+        {t(
+          "Each entry has area, times and either day (0 Sunday – 6 Saturday) or date (YYYY-MM-DD). A date-specific entry replaces weekly times for that area. Use an empty times array to close a date. Times are in MYT.",
+        )}
       </p>
       <p className="field-note">
-        Example structure:{" "}
-        {`{"day":2,"area":"counter","times":["18:00","20:00"]}`}. List only
-        approved start times; dining may continue for the configured duration
-        after each start.
+        {t("Example structure:")}{" "}
+        {t('{"day":2,"area":"counter","times":["18:00","20:00"]}')}
+        {t(
+          ". List only approved start times; dining may continue for the configured duration after each start.",
+        )}
       </p>
       <textarea
-        aria-label="Service times JSON"
+        aria-label={t("Service times JSON")}
         rows={9}
         value={services}
         onChange={(e) => setServices(e.target.value)}
       />
-      <h3>Temporary closures</h3>
+      <h3>{t("Temporary closures")}</h3>
       <p className="field-note">
-        Each entry has area (all, counter or private), start and end in ISO
-        format with +08:00. Any overlapping dining interval is unavailable for
-        new requests. Closures do not cancel existing bookings; contact affected
-        guests.
+        {t(
+          "Each entry has area (all, counter or private), start and end in ISO format with +08:00. Any overlapping dining interval is unavailable for new requests. Closures do not cancel existing bookings; contact affected guests.",
+        )}
       </p>
       <textarea
-        aria-label="Temporary closures JSON"
+        aria-label={t("Temporary closures JSON")}
         rows={5}
         value={closures}
         onChange={(e) => setClosures(e.target.value)}
       />
       {error && (
         <p className="error" role="alert">
-          {error}
+          {errorText(error)}
         </p>
       )}
       <button className="button" disabled={busy}>
-        {busy ? "Saving…" : "Save booking settings"} ↗
+        {busy ? t("Saving…") : t("Save booking settings")} ↗
       </button>
     </form>
   );

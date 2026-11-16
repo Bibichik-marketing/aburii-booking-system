@@ -33,6 +33,10 @@ Roles are `admin`, `manager`, `staff`. All active staff can inspect reservations
 7. Sign in at `/staff`, open Booking settings, and enter **verified** counter capacity, party limits, room inventory, dining durations, service start times, advance notice, horizon and hold duration. Enable each area when ready. Defaults are illustrative policy values and both areas are disabled; there are no room or service defaults.
 8. Approve the text in `app/policies/page.tsx` before enabling live bookings, replace the `2026-11-draft` policy version in the migration for a fresh installation (or a separately reviewed forward migration if already deployed), and establish a personal-data retention policy. See `LAUNCH.md`.
 
+## Languages
+
+English is the default. Use the EN / 中文 control in the header for Simplified Chinese on customer, staff and policy pages. The selection persists in the browser; changing it preserves current form entries, selected seating/time and unsaved staff settings. See `LOCALIZATION.md` for implementation and verification details. Database identifiers and WhatsApp templates are unchanged.
+
 ## Customer experience
 
 Customers select only Counter Seating（吧台）or Private Room（包间）using responsive cards. No floor plan, table number or room identifier appears in the public API or booking receipt. Date, start time, guests, name, international phone and policy consent are required. Email and requests are optional. WhatsApp updates require a separate optional opt-in.

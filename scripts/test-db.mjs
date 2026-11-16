@@ -55,7 +55,12 @@ try {
   });
   const result = spawnSync(
     process.execPath,
-    ["--test", "--test-concurrency=1", "tests/database.test.mjs"],
+    [
+      "--test",
+      "--test-concurrency=1",
+      "tests/database.test.mjs",
+      "tests/i18n.test.mjs",
+    ],
     { env, stdio: "inherit" },
   );
   process.exitCode = result.status ?? 1;

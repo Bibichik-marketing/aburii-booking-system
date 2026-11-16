@@ -864,3 +864,85 @@ footer p {
     font-size: 36px;
   }
 }
+
+/* Language controls share the existing header; changing locale never remounts forms. */
+.language-root {
+  display: contents;
+}
+.language-switcher {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex-shrink: 0;
+  border-left: 1px solid var(--line);
+  padding-left: 18px;
+}
+.language-switcher button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 8px 3px;
+  font-size: 11px;
+  min-height: 36px;
+}
+.language-switcher button[aria-pressed="true"] {
+  color: var(--accent);
+  font-weight: 700;
+}
+.language-switcher > span {
+  color: var(--line);
+  font-size: 10px;
+}
+:lang(zh-CN) {
+  font-family:
+    Arial, "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+}
+html[lang="zh-CN"] h1,
+html[lang="zh-CN"] h2 {
+  letter-spacing: 0;
+  line-height: 1.35;
+}
+html[lang="zh-CN"] .eyebrow {
+  letter-spacing: 1.5px;
+}
+.booking-panel,
+.reservation > div,
+.settings-grid > div,
+.two-col > label {
+  min-width: 0;
+}
+.field-note,
+.notice,
+.error,
+.policy p,
+.reservation p {
+  overflow-wrap: anywhere;
+}
+.settings textarea {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 650px) {
+  .header {
+    padding-inline: 16px;
+  }
+  .header nav {
+    gap: 10px;
+  }
+  .header img {
+    width: 93px;
+  }
+  .language-switcher {
+    padding-left: 7px;
+    gap: 3px;
+  }
+  .language-switcher button {
+    font-size: 10px;
+  }
+  .header nav > a:first-child {
+    max-width: 83px;
+  }
+  html[lang="zh-CN"] .intro h1 {
+    font-size: 34px;
+  }
+}

@@ -1,4 +1,5 @@
 "use client";
+import { useLanguage } from "@/lib/language";
 import { useEffect, useRef, useState } from "react";
 type Area = "counter" | "private";
 type Slot = { start: string; end: string };
@@ -12,13 +13,15 @@ type Receipt = {
   end: string;
   minimumSpend: number;
 };
-const format = (value: string) =>
-  new Intl.DateTimeFormat("en-MY", {
+const formatDate = (value: string, locale: string) =>
+  new Intl.DateTimeFormat(locale, {
     timeZone: "Asia/Kuala_Lumpur",
     dateStyle: "medium",
     timeStyle: "short",
   }).format(new Date(value));
 export default function Booking() {
+  const { t, locale, errorText } = useLanguage();
+  const format = (value: string) => formatDate(value, locale);
   const [area, setArea] = useState<Area>("counter");
   const [date, setDate] = useState("");
   const [guests, setGuests] = useState(2);
@@ -114,52 +117,64 @@ export default function Booking() {
         <div className="success-mark">✓</div>
         <div className="eyebrow">
           {receipt.status === "pending"
-            ? "REQUEST RECEIVED"
-            : "RESERVATION STATUS"}
+            ? t("REQUEST RECEIVED")
+            : t("RESERVATION STATUS")}
         </div>
         <h2>
           {receipt.status === "pending" ? (
             <>
-              A lovely evening
+              {t("A lovely evening")}
               <br />
-              <em>starts here.</em>
+              <em>{t("starts here.")}</em>
             </>
           ) : (
             <>
-              Your reservation
+              {t("Your reservation")}
               <br />
-              <em>update.</em>
+              <em>{t("update.")}</em>
             </>
           )}
         </h2>
         <p>
-          Your reference is <strong>{receipt.reference}</strong>
+          {t("Your reference is ")}
+          <strong>{receipt.reference}</strong>
         </p>
         <dl>
-          <dt>Status</dt>
-          <dd>{receipt.status}</dd>
-          <dt>When</dt>
-          <dd>{format(receipt.start)} (MYT)</dd>
-          <dt>Guests</dt>
-          <dd>{receipt.guests}</dd>
-          <dt>Setting</dt>
+          <dt>{t("Status")}</dt>
+          <dd>{t(receipt.status)}</dd>
+          <dt>{t("When")}</dt>
           <dd>
-            {receipt.area === "counter" ? "Counter Seating" : "Private Room"}
+            {format(receipt.start)}
+            {t(" (MYT)")}
+          </dd>
+          <dt>{t("Guests")}</dt>
+          <dd>{receipt.guests}</dd>
+          <dt>{t("Setting")}</dt>
+          <dd>
+            {receipt.area === "counter"
+              ? t("Counter Seating")
+              : t("Private Room")}
           </dd>
           {receipt.minimumSpend > 0 && (
             <>
-              <dt>Minimum spend</dt>
-              <dd>RM {receipt.minimumSpend.toFixed(2)} per booking</dd>
+              <dt>{t("Minimum spend")}</dt>
+              <dd>
+                RM {receipt.minimumSpend.toFixed(2)}
+                {t(" per booking")}
+              </dd>
             </>
           )}
         </dl>
         <p className="notice">
           {receipt.status === "pending"
-            ? `This is a request, not a confirmed reservation. Your capacity hold expires ${format(receipt.expiresAt)} MYT unless our team confirms it. Please call us if you need assistance.`
-            : "Please contact our team with your reference for assistance."}
+            ? t(
+                "This is a request, not a confirmed reservation. Your capacity hold expires {expiry} MYT unless our team confirms it. Please call us if you need assistance.",
+                { expiry: format(receipt.expiresAt) },
+              )
+            : t("Please contact our team with your reference for assistance.")}
         </p>
         <a className="button" href="tel:+60109100267">
-          Contact Aburii ↗
+          {t("Contact Aburii ↗")}
         </a>
         <button
           className="text-button"
@@ -171,7 +186,7 @@ export default function Booking() {
             key.current = null;
           }}
         >
-          Make another request
+          {t("Make another request")}
         </button>
       </div>
     );
@@ -179,8 +194,8 @@ export default function Booking() {
     <form className="booking-panel" onSubmit={submit}>
       <div className="panel-heading">
         <div>
-          <span className="eyebrow">RESERVATIONS</span>
-          <h2>Your place at Aburii</h2>
+          <span className="eyebrow">{t("RESERVATIONS")}</span>
+          <h2>{t("Your place at Aburii")}</h2>
         </div>
         <span className="seal" lang="ja">
           炙
@@ -188,7 +203,8 @@ export default function Booking() {
       </div>
       <fieldset disabled={busy}>
         <legend>
-          <span className="step">01</span> Choose your setting
+          <span className="step">01</span>
+          {t(" Choose your setting")}
         </legend>
         <div className="area-grid">
           {(
@@ -229,23 +245,25 @@ export default function Booking() {
                 <span lang="zh">{x.jp}</span>
                 <span className="radio-mark" />
               </span>
-              <strong>{x.title}</strong>
-              <span>{x.description}</span>
+              <strong>{t(x.title)}</strong>
+              <span>{t(x.description)}</span>
             </label>
           ))}
         </div>
         <p className="field-note">
-          Select a dining area. Our team will arrange your seats or private
-          room.
+          {t(
+            "Select a dining area. Our team will arrange your seats or private room.",
+          )}
         </p>
       </fieldset>
       <fieldset disabled={busy}>
         <legend>
-          <span className="step">02</span> Find your moment
+          <span className="step">02</span>
+          {t(" Find your moment")}
         </legend>
         <div className="two-col">
           <label>
-            Reservation date
+            {t("Reservation date")}
             <input
               type="date"
               required
@@ -256,7 +274,7 @@ export default function Booking() {
             />
           </label>
           <label>
-            Number of guests
+            {t("Number of guests")}
             <input
               type="number"
               required
@@ -268,24 +286,26 @@ export default function Booking() {
           </label>
         </div>
         <div className="time-label">
-          Available times <span>Malaysia time (UTC+8)</span>
+          {t("Available times ")}
+          <span>{t("Malaysia time (UTC+8)")}</span>
         </div>
         <div aria-live="polite">
           {loading ? (
-            <p className="notice">Finding your moment…</p>
+            <p className="notice">{t("Finding your moment…")}</p>
           ) : availabilityError ? (
             <p className="notice">
-              {availabilityError}{" "}
-              <a href="tel:+60109100267">Call our team ↗</a>
+              {errorText(availabilityError)}{" "}
+              <a href="tel:+60109100267">{t("Call our team ↗")}</a>
             </p>
           ) : !date ? (
             <p className="time-empty">
-              Choose a date and party size to see available times.
+              {t("Choose a date and party size to see available times.")}
             </p>
           ) : slots.length === 0 ? (
             <p className="notice">
-              No online availability for this party size and setting. Try
-              another date or contact our team.
+              {t(
+                "No online availability for this party size and setting. Try another date or contact our team.",
+              )}
             </p>
           ) : (
             <div className="time-grid">
@@ -297,7 +317,7 @@ export default function Booking() {
                   className={`time ${start === x.start ? "chosen" : ""}`}
                   onClick={() => setStart(x.start)}
                 >
-                  {new Intl.DateTimeFormat("en-MY", {
+                  {new Intl.DateTimeFormat(locale, {
                     timeZone: "Asia/Kuala_Lumpur",
                     hour: "numeric",
                     minute: "2-digit",
@@ -309,53 +329,60 @@ export default function Booking() {
         </div>
         {start && (
           <p className="field-note">
-            Your dining time: {format(start)} –{" "}
-            {new Intl.DateTimeFormat("en-MY", {
+            {t("Your dining time: ")}
+            {format(start)} –{" "}
+            {new Intl.DateTimeFormat(locale, {
               timeZone: "Asia/Kuala_Lumpur",
               hour: "numeric",
               minute: "2-digit",
             }).format(new Date(slots.find((s) => s.start === start)!.end))}
-            . Pending hold: {hold} minutes, or until arrival if sooner.
+            {t(". Pending hold: ")}
+            {hold}
+            {t(" minutes, or until arrival if sooner.")}
           </p>
         )}
         {spend > 0 && (
           <p className="notice">
-            Minimum spend for this setting: RM {spend.toFixed(2)} per booking.
+            {t("Minimum spend for this setting: RM ")}
+            {spend.toFixed(2)}
+            {t(" per booking.")}
           </p>
         )}
       </fieldset>
       <fieldset disabled={busy}>
         <legend>
-          <span className="step">03</span> A few details
+          <span className="step">03</span>
+          {t(" A few details")}
         </legend>
         <div className="two-col">
           <label>
-            Full name
+            {t("Full name")}
             <input
               name="name"
               autoComplete="name"
               required
               minLength={2}
               maxLength={100}
-              placeholder="Your full name"
+              placeholder={t("Your full name")}
             />
           </label>
           <label>
-            Phone / WhatsApp
+            {t("Phone / WhatsApp")}
             <input
               name="phone"
               type="tel"
               autoComplete="tel"
               required
               pattern="\+[1-9][0-9 ()-]{7,20}"
-              title="Include country code, for example +60 12 345 6789"
+              title={t("Include country code, for example +60 12 345 6789")}
               maxLength={24}
               placeholder="+60 12 345 6789"
             />
           </label>
         </div>
         <label>
-          Email <span className="optional">optional</span>
+          {t("Email ")}
+          <span className="optional">{t("optional")}</span>
           <input
             name="email"
             type="email"
@@ -365,44 +392,50 @@ export default function Booking() {
           />
         </label>
         <label>
-          Special requests <span className="optional">optional</span>
+          {t("Special requests ")}
+          <span className="optional">{t("optional")}</span>
           <textarea
             name="requests"
             maxLength={1000}
             rows={3}
-            placeholder="A celebration, dietary needs, or anything we should know?"
+            placeholder={t(
+              "A celebration, dietary needs, or anything we should know?",
+            )}
           />
         </label>
         <p className="field-note">
-          We’ll do our best to accommodate requests. Please call to discuss
-          allergies before your visit.
+          {t(
+            "We’ll do our best to accommodate requests. Please call to discuss allergies before your visit.",
+          )}
         </p>
       </fieldset>
       <label className="checkbox">
         <input type="checkbox" name="consent" required />
         <span>
-          I agree to the{" "}
+          {t("I agree to the")}{" "}
           <a href="/policies" target="_blank" rel="noreferrer">
-            privacy & booking policy
+            {t("privacy & booking policy")}
           </a>{" "}
-          and understand this is a reservation request, subject to confirmation.
+          {t(
+            "and understand this is a reservation request, subject to confirmation.",
+          )}
         </span>
       </label>
       <label className="checkbox">
         <input type="checkbox" name="whatsapp" />
-        <span>Send reservation updates to my WhatsApp number.</span>
+        <span>{t("Send reservation updates to my WhatsApp number.")}</span>
       </label>
       {error && (
         <p className="error" role="alert">
-          {error}
+          {errorText(error)}
         </p>
       )}
       <button className="button submit" disabled={busy || !start || loading}>
-        {busy ? "Sending your request…" : "Request a reservation"}
+        {busy ? t("Sending your request…") : t("Request a reservation")}
         <span aria-hidden="true">↗</span>
       </button>
       <p className="bottom-note">
-        A considered experience, from the very first moment.
+        {t("A considered experience, from the very first moment.")}
       </p>
     </form>
   );
