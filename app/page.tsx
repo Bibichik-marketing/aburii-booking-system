@@ -5,30 +5,8 @@ export default function Home() {
   const { t } = useLanguage();
   return (
     <main id="main">
-      <section className="intro">
-        <div className="eyebrow">
-          <span />
-          {t(" THE ART OF GATHERING")}
-        </div>
-        <p className="japanese" lang="ja">
-          炙り · 心を込めて
-        </p>
-        <h1>
-          {t("A seat. A moment.")}
-          <br />
-          <em>{t("Something memorable.")}</em>
-        </h1>
-        <p className="intro-copy">
-          {t("Exceptional Japanese dining, shared at your own pace.")}
-          <br />
-          {t("Your next Aburii experience begins here.")}
-        </p>
-        <div className="intro-bottom">
-          <span>{t("TTDI, KUALA LUMPUR")}</span>
-          <span>{t("RESERVATIONS ↓")}</span>
-        </div>
-      </section>
       <section className="booking-layout" aria-label={t("Make a reservation")}>
+        <Booking />
         <aside>
           <span className="eyebrow">{t("YOUR EXPERIENCE")}</span>
           <h2>
@@ -56,7 +34,6 @@ export default function Home() {
             60000 Kuala Lumpur
           </p>
         </aside>
-        <Booking />
       </section>
     </main>
   );

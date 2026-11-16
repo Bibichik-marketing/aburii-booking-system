@@ -101,37 +101,10 @@ em {
   padding: 15px;
   z-index: 10;
 }
-.intro {
-  text-align: center;
-  max-width: 1196px;
-  margin: auto;
-  padding: 58px 35px 0;
-  position: relative;
-  overflow: hidden;
-}
-.intro:before {
-  content: "";
-  position: absolute;
-  pointer-events: none;
-  width: 480px;
-  height: 480px;
-  left: 50%;
-  top: 12px;
-  transform: translateX(-50%);
-  border: 1px solid #e5d6c4;
-  border-radius: 50%;
-  z-index: -1;
-}
 .eyebrow {
   font-size: 10px;
   letter-spacing: 2.5px;
   font-weight: 500;
-}
-.intro .eyebrow {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
 }
 .eyebrow > span {
   display: inline-block;
@@ -140,42 +113,25 @@ em {
   border-radius: 50%;
   background: var(--accent);
 }
-.japanese {
-  font-family: serif;
-  color: #a78473;
-  font-size: 12px;
-  letter-spacing: 5px;
-  margin: 23px 0 12px;
-}
 h1 {
   font-size: clamp(40px, 4.7vw, 66px);
   line-height: 1.14;
   margin-bottom: 22px;
 }
-.intro-copy {
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.9;
-}
-.intro-bottom {
-  display: flex;
-  justify-content: space-between;
-  border-bottom: 1px solid var(--line);
-  padding: 36px 0 20px;
-  margin-top: 24px;
-  font-size: 9px;
-  letter-spacing: 2px;
-  color: var(--muted);
-}
 .booking-layout {
   max-width: 1126px;
-  margin: 60px auto 90px;
+  margin: 36px auto 72px;
   display: grid;
   grid-template-columns: 310px 1fr;
+  grid-template-areas: "aside form";
   gap: 66px;
   padding: 0 20px;
 }
+.booking-layout > .booking-panel {
+  grid-area: form;
+}
 .booking-layout aside {
+  grid-area: aside;
   padding-top: 22px;
 }
 aside h2 {
@@ -707,14 +663,6 @@ footer p {
   font-size: 28px;
   color: var(--ink);
 }
-@media (min-width: 1600px) {
-  .intro {
-    padding-top: 75px;
-  }
-  .booking-layout {
-    margin-top: 70px;
-  }
-}
 @media (max-width: 900px) {
   .booking-layout {
     grid-template-columns: 230px 1fr;
@@ -750,28 +698,15 @@ footer p {
     font-size: 9px;
     letter-spacing: 0;
   }
-  .intro {
-    padding: 38px 22px 0;
-  }
-  .intro h1 {
-    font-size: 40px;
-  }
-  .intro-copy {
-    font-size: 12px;
-  }
-  .intro-bottom {
-    font-size: 8px;
-    letter-spacing: 1px;
-    padding-top: 25px;
-    margin-top: 12px;
-  }
   .booking-layout {
-    display: block;
-    margin: 30px auto 45px;
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+    margin: 20px auto 40px;
     padding: 0 16px;
   }
   .booking-layout aside {
-    padding: 0 7px 25px;
+    padding: 0 7px;
   }
   .booking-layout aside h2 {
     font-size: 28px;
@@ -941,8 +876,5 @@ html[lang="zh-CN"] .eyebrow {
   }
   .header nav > a:first-child {
     max-width: 83px;
-  }
-  html[lang="zh-CN"] .intro h1 {
-    font-size: 34px;
   }
 }
