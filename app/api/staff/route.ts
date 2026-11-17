@@ -29,9 +29,85 @@ async function setSession(data: {
   jar.set(names[0], data.access_token, { ...options, maxAge: data.expires_in });
   jar.set(names[1], data.refresh_token, { ...options, maxAge: 60 * 60 * 12 });
 }
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    return reply(await rpc("aburii_staff_data", {}, await staffToken()));
+    const token = await staffToken();
+    const params = new URL(req.url).searchParams;
+    const view = params.get("view");
+    if (view === "context")
+      return reply(await rpc("aburii_staff_context", {}, token));
+    if (view === "today")
+      return reply(await rpc("aburii_staff_today", {}, token));
+    if (view === "detail")
+      return reply(
+        await rpc(
+          "aburii_staff_detail",
+          { p_id: z.string().uuid().parse(params.get("id")) },
+          token,
+        ),
+      );
+    if (view === "list") {
+      const date = z
+        .string()
+        .regex(/^\d{4}-\d{2}-\d{2}$/)
+        .nullable();
+      const p = z
+        .object({
+          q: z.string().max(150),
+          from: date,
+          to: date,
+          status: z.enum([
+            "all",
+            "pending",
+            "confirmed",
+            "seated",
+            "completed",
+            "cancelled",
+            "declined",
+            "expired",
+            "no_show",
+          ]),
+          area: z.enum(["all", "counter", "private"]),
+          sort: z.enum(["arrival", "name", "guests", "area", "status"]),
+          order: z.enum(["asc", "desc"]),
+          page: z.coerce.number().int().min(1).max(1000000),
+          size: z.coerce.number().refine((n) => [10, 25, 50].includes(n)),
+          archive: z.enum(["all", "active", "archived"]),
+        })
+        .parse({
+          q: params.get("q") || "",
+          from: params.get("from") || null,
+          to: params.get("to") || null,
+          status: params.get("status") || "all",
+          area: params.get("area") || "all",
+          sort: params.get("sort") || "arrival",
+          order: params.get("order") || "desc",
+          page: params.get("page") || 1,
+          size: params.get("size") || 25,
+          archive: params.get("archive") || "all",
+        });
+      if (p.from && p.to && p.from > p.to)
+        throw new ApiError("Invalid date range");
+      return reply(
+        await rpc(
+          "aburii_staff_list",
+          {
+            p_query: p.q,
+            p_from: p.from,
+            p_to: p.to,
+            p_status: p.status,
+            p_area: p.area,
+            p_sort: p.sort,
+            p_order: p.order,
+            p_page: p.page,
+            p_size: p.size,
+            p_archive: p.archive,
+          },
+          token,
+        ),
+      );
+    }
+    return reply(await rpc("aburii_staff_data", {}, token));
   } catch (e) {
     return failure(e);
   }
@@ -41,7 +117,15 @@ export async function POST(req: Request) {
     await guard(req);
     const p = await json(req);
     const action = z
-      .enum(["login", "logout", "refresh", "status", "config", "assign"])
+      .enum([
+        "login",
+        "logout",
+        "refresh",
+        "status",
+        "config",
+        "assign",
+        "archive",
+      ])
       .parse(p.action);
     if (action === "login") {
       await limit(req, "login");
@@ -96,6 +180,14 @@ export async function POST(req: Request) {
       );
     }
     const id = z.string().uuid().parse(p.id);
+    if (action === "archive")
+      return reply(
+        await rpc(
+          "aburii_staff_archive",
+          { p_id: id, p_archived: z.boolean().parse(p.archived) },
+          token,
+        ),
+      );
     if (action === "assign")
       return reply(
         await rpc(

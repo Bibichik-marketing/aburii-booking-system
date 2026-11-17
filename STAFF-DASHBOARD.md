@@ -1,31 +1,50 @@
-# Staff service desk
+# Staff workspace
 
-The staff interface keeps Aburii's existing cream, burgundy, typography and bilingual header. It uses the existing `/api/staff` actions and existing Supabase RPCs. No schema, authentication, permissions, capacity enforcement, notification worker or audit behavior was changed.
+The staff area has three actual routes with one shared authenticated workspace and existing detail/settings components:
 
-## Daily overview
+- `/staff` — **Dashboard**: all reservations across all dates, including history and future bookings. No date filter is selected by default. There is one compact desktop table or one mobile card list, never two visible management lists.
+- `/staff/today` — **Today**: arrivals whose scheduled start falls on the current Asia/Kuala_Lumpur calendar date. A small Total Reservations / Pending / Confirmed / Total Guests overview precedes one list. Pending requests appear first, ordered by arrival; the remaining entries follow chronological arrival time. Total Reservations includes all today's statuses; Total Guests includes pending, confirmed, seated and completed records. These are service summaries, not capacity calculations.
+- `/staff/settings` — **Settings**, shown only to Admins. Direct navigation by other roles does not mount the settings editor; configuration RPCs still enforce Admin membership server-side.
 
-Today's Reservations, Pending, Confirmed and Total Guests always describe the current **Malaysia calendar day**, independently of the service-date and search filters below. Active reservation totals include pending, confirmed, seated and completed bookings; Total Guests includes pending requests and excludes cancelled, declined, expired and no-show records. These are service summary metrics, not occupancy calculations. The first three cards offer shortcuts to today's matching reservation list.
+English and Simplified Chinese apply to all three pages, details, filters, status labels, archive prompts and existing settings. The language preference persists as before. The customer booking page was not redesigned or changed.
 
-Pending requests have a dedicated highlighted queue, chronological date groups, arrival/end times, hold expiry, a seating-category label and immediate Confirm / Reject controls. Other reservations are grouped by service date and arrival time. Search, date, seating-area and status filters remain available. The dashboard refreshes every minute and displays its last refresh time.
+## Search, sorting and pagination
 
-## Reservation details
+Dashboard search matches name, phone or reference, with formatted phone matching supported. Date range endpoints are inclusive Malaysia calendar dates. Status, seating area, archive visibility and search filters combine with the range. Rejected displays the existing `declined` status; Seated remains available to preserve the existing service workflow. Archive visibility defaults to All so no records silently disappear.
 
-The keyboard-accessible detail dialog shows the original dining interval, seating category, internal room, guests, contacts, requests, minimum spend and applicable capacity commitment. Confirm uses the existing compare-and-set status endpoint. Reject, cancellation and no-show have a bilingual confirmation step with the existing capacity-policy explanation. The server remains authoritative for all transitions and conflicts.
+Rows can be sorted by arrival, customer, guest count, seating area or effective status in either direction. A stable booking-ID tie-breaker prevents overlapping pages when values match. Page sizes are 10, 25 or 50; the database returns only the requested page plus the total. Out-of-range pages clamp to the last page after results shrink. Search input is debounced and stale responses cannot overwrite newer results.
 
-**Edit is intentionally limited to the existing supported private-room assignment capability.** It is available for future pending/confirmed private bookings. Existing guest details, party size and reservation times are read-only because the current API does not support safely editing them. A new room assignment is checked transactionally by the existing RPC on save; no success is simulated. Counter bookings and started/terminal reservations show an explanation instead of an enabled Edit control.
+The old read RPC remains available for compatibility, but the workspace no longer relies on its seven-day lookback / 2,000-row limit. The new context RPC excludes bulk booking data. List, Today and individual-detail reads all verify active staff membership.
 
-WhatsApp opens the guest's validated international number in a manual chat. It does not send a message automatically, alter consent or change the existing automated WhatsApp template/outbox workflow. Notification queue health remains available to the same manager/admin roles as before.
+## Actions and archive semantics
 
-## Read-only timeline and administration
+Click a table row or mobile card, or use Details, to open the shared reservation dialog. Existing Confirm, Reject, private-room Edit, manual WhatsApp and service-status actions remain. Edit continues to support **future private-room assignment only**; guest information, party size and dining times remain read-only because no safe editing API exists for those fields. The existing status/assignment RPCs and capacity rules are unchanged.
 
-The Availability Timeline visualizes original capacity commitments for both seating categories on the selected service day. It mirrors the existing database commitment policy for display: pre-start releases stay released; unreleased post-start cancellations, no-shows and completed bookings retain their original intervals; pending expiry before start releases capacity, while expiry exactly at start preserves the interval. Overnight intervals are clipped to the selected day. The display does not change any capacity calculation in the booking backend.
+Admin Archive and Restore are non-destructive. They append `booking_archived` / `booking_restored` events to the existing private audit table. Current visibility is derived from the latest archive event. No booking row, status, original time interval, capacity commitment, notification consent or prior audit event is rewritten or deleted. Active or retained capacity commitments cannot be archived. Expired pending requests may be archived without materializing a status change. Archive filtering is independent of reservation status.
 
-The timeline ignores reservation search/status filters so occupancy cannot disappear merely because staff selected a different status. It contains no editing, capacity, opening-hours or availability overrides. It is an occupancy reference, not a promise that a new party can be booked. On smaller screens the chart scrolls within its own container. All configuration remains in the admin-only Admin Settings view, using the existing settings component and configuration endpoint.
+All roles can inspect archive metadata; only active Admins can write Archive/Restore events. Original database grants, authentication cookies, session refresh, notification worker and mutation permissions remain intact.
+
+## Compact occupancy reference
+
+Today has a collapsed, read-only occupancy timeline below its single management list. It includes original intervals that intersect today, including overnight arrivals and retained capacity after cancellation/no-show. It has no management or configuration controls. Inventory, capacity, service hours and booking policy settings remain solely in Settings. Archiving never alters occupancy or bookable availability.
+
+## Additive migration
+
+`supabase/002_staff_workspace.sql` adds staff read/archive functions and two indexes using the existing booking/audit tables. **No table or column is added, removed or migrated.** `001_aburii.sql` and all existing booking/capacity/status/assignment functions are unchanged. Functions are created with pinned search paths, revoked public/service-client execution and explicit authenticated grants inside a single transaction.
+
+For a new Aburii Supabase project, apply `001_aburii.sql` then `002_staff_workspace.sql`. For an existing Aburii environment, apply only `002_staff_workspace.sql` through trusted database administration before serving this UI. This task applied it only to the already-isolated local development database; no production database was contacted.
+
+Local setup now includes both migrations. Existing local accounts and data can be preserved with:
+
+```sh
+npm run local:migrate
+npm run local:start
+```
+
+The local adapter exposes the new operations through the same verified sessions and fixed RPC allowlist. No authentication bypass is added.
 
 ## Verification
 
-- TypeScript and standalone production build passed.
-- All 53 tests passed: 39 database integration tests, 7 localization tests and 7 staff presentation tests. Final UI-only refinements also passed the 14 localization/presentation tests.
-- Tests cover MYT date boundaries, arrival sorting, original-interval commitments, pre-start hold expiry, overnight clipping, service-action timing and safe WhatsApp links.
-- Browser QA used synthetic data on an isolated loopback-only fixture: Confirm, room reassignment, rejection prompt, English/Chinese dialogs, Admin Settings, staff-only navigation, manual WhatsApp destination, Escape handling and responsive layouts at 320px, 768px and 1280px. No horizontal page overflow was observed; the timeline has its own horizontal scroll container.
-- The fixture was stopped after QA. It made no Supabase connections and sent no notifications. The standard preview remains http://localhost:3100/staff and requires real Aburii staff configuration for live data. No production deployment was performed.
+67 automated tests passed, including unchanged capacity/concurrency tests and new tests for historical reads beyond 2,000 records, combined filters, inclusive MYT boundaries, deterministic sorting and pagination, membership revocation, admin-only archive/restore, retained commitments, immutable booking rows and audit history, and Today/overnight separation. TypeScript and production build passed.
+
+Browser checks used the existing authenticated local synthetic-data environment. Combined search/date/status/seating filters, row/card detail opening, separate Today routing, non-duplicated daily records, archive confirmation without changing sample records, Settings navigation, English/Chinese rendering and responsive desktop/mobile presentation were verified. No notifications were sent and no production deployment occurred.

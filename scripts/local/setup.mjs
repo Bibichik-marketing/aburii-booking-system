@@ -84,6 +84,14 @@ revoke all on schema local_auth from public,anon,authenticated,service_role;
 insert into local_auth.metadata values('identity',${literal(c.databaseIdentity)});`,
 );
 sqlSync(c, readFileSync(join(root, "supabase/001_aburii.sql"), "utf8"));
+sqlSync(
+  c,
+  readFileSync(join(root, "supabase/002_staff_workspace.sql"), "utf8"),
+);
+sqlSync(
+  c,
+  "insert into local_auth.metadata(key,value) values('migration:002_staff_workspace','applied') on conflict(key) do nothing;",
+);
 const id = randomUUID(),
   email = "admin@aburii.test",
   password = randomBytes(24).toString("base64url"),

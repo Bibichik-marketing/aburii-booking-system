@@ -21,7 +21,7 @@ For the isolated, password-protected local account and synthetic PostgreSQL data
 ## Connect a separate Supabase project
 
 1. Create a **new, empty Aburii-only Supabase project**. Never execute this migration in BiBiChik's project. The migration creates a private `aburii` schema and dedicated `public.aburii_*` RPC functions.
-2. Execute `supabase/001_aburii.sql` once in the new project's SQL editor. It is intentionally a one-time, atomic migration, not a destructive reset script.
+2. Execute `supabase/001_aburii.sql` followed by `supabase/002_staff_workspace.sql` once in the new project's SQL editor. It is intentionally a one-time, atomic migration, not a destructive reset script.
 3. Set `ABURII_SUPABASE_URL`, `ABURII_SUPABASE_ANON_KEY`, and `ABURII_SUPABASE_SERVICE_ROLE_KEY` in `.env.local` or the hosting environment. Only server code reads these. All variables are prefixed `ABURII_` to avoid accidentally inheriting BiBiChik configuration.
 4. Set `ABURII_SITE_URL` to the exact browser origin, with scheme and no trailing slash; e.g. `https://booking.your-aburii-domain.example`. POST requests require that exact Origin. Set `ABURII_RATE_LIMIT_SECRET` to a freshly generated random secret (at least 32 bytes).
 5. In Supabase Auth, disable public signup and invite Aburii's staff. Use Supabase's invitation/recovery flows to establish passwords. No passwords are stored in this project.
@@ -63,7 +63,7 @@ The server validates JSON sizes and request fields. Availability returns start/e
 
 See `STAFF-DASHBOARD.md` for the daily overview, pending queue, detail actions, read-only occupancy timeline and supported editing scope.
 
-The dashboard refreshes every minute and supports service date, area, status and customer/reference/phone search; confirmation, decline, cancellation, seating, completion and no-show; internal room reassignment; and admin settings. It displays up to 2,000 bookings from seven days ago through the booking horizon. Historical reporting and bulk exports are not included. Actions and configuration versions are audited privately.
+The dashboard refreshes every minute and supports service date, area, status and customer/reference/phone search; confirmation, decline, cancellation, seating, completion and no-show; internal room reassignment; and admin settings. Dashboard reads all dates using database pagination, combined filters and sorting. Today has one daily operations list and a secondary read-only timeline. Admin Archive/Restore preserves booking rows and audit history. Bulk exports are not included. Actions and configuration versions are audited privately.
 
 Auth uses Supabase password authentication with HttpOnly, SameSite=Strict cookies restricted to `/api/staff`. Access tokens expire with the provider session; refresh tokens rotate through the server, remain HttpOnly and have a 12-hour cookie lifetime. Logout attempts provider revocation and clears cookies. Use HTTPS in production. Sensitive responses are `no-store`; no personal information or credentials are logged by the application.
 

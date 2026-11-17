@@ -45,6 +45,8 @@ export async function supabase(
       "Configuration has active reservations",
       "Request ID reused",
       "Booking not found",
+      "Active commitment cannot be archived",
+      "Invalid list filters",
     ];
     throw new ApiError(
       known.includes(data.message)

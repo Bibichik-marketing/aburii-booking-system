@@ -12,7 +12,14 @@ import {
   root,
 } from "../scripts/local/core.mjs";
 test("development commands refuse production before reading credentials or starting services", () => {
-  for (const script of ["start", "setup", "credentials", "stop", "check"]) {
+  for (const script of [
+    "start",
+    "setup",
+    "credentials",
+    "stop",
+    "check",
+    "migrate",
+  ]) {
     const child = spawnSync(process.execPath, [`scripts/local/${script}.mjs`], {
       cwd: root,
       env: { ...process.env, NODE_ENV: "production" },

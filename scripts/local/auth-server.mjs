@@ -17,6 +17,22 @@ const serviceRpcs = {
 };
 const staffRpcs = {
   aburii_staff_data: {},
+  aburii_staff_context: {},
+  aburii_staff_today: {},
+  aburii_staff_detail: { p_id: "uuid" },
+  aburii_staff_archive: { p_id: "uuid", p_archived: "boolean" },
+  aburii_staff_list: {
+    p_query: "text",
+    p_from: "date",
+    p_to: "date",
+    p_status: "text",
+    p_area: "text",
+    p_sort: "text",
+    p_order: "text",
+    p_page: "integer",
+    p_size: "integer",
+    p_archive: "text",
+  },
   aburii_status: { p_id: "uuid", p_expected: "text", p_next: "text" },
   aburii_assign: { p_id: "uuid", p_room: "text" },
   aburii_configure: { p_config: "jsonb", p_version: "integer" },
