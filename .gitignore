@@ -7,3 +7,6 @@ artifacts/
 
 # Generated development credentials, sessions and isolated PostgreSQL cluster
 .local-dev/
+
+# Private database exports and recovery evidence
+.backups/

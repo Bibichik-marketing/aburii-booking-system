@@ -13,13 +13,13 @@ Project: `oemwlqisfwrhfxsvuszi` only. Review date: 2026-11-17, Asia/Kuala_Lumpur
 | Private schema exposure | PASS for API exposure only | `Accept-Profile: aburii` returns HTTP 406 / `PGRST106`; this proves it is not an allowed Data API profile, not that the schema does not exist |
 | Public Auth settings | PASS for reachability | HTTP 200; email enabled, mail auto-confirm false, phone auto-confirm false, anonymous users disabled |
 | Staff-only signup configuration | FAIL | `disable_signup=false`: public signup is currently enabled. Do not change it as part of this read-only review; disable through separately authorized Auth configuration before staff onboarding/production use |
-| Publishable-key REST metadata | INVESTIGATE | HTTP 401, despite HTTP 200 from public Auth settings; no response body or credentials displayed. Auth-settings reachability alone does not prove all Data API requests work. Staff JWT/gateway behavior remains untested |
+| Publishable key / Data API | PASS — 401 diagnosed | The root OpenAPI endpoint returns 401 "Secret API key required" by design. A normal GET to a known nonexistent public table with limit=0 returns 404/PGRST205 for the saved key; a deliberately invalid-key control returns 401. Headers use apikey only. No RLS/key rotation/private-schema changes are needed. Staff JWT/role flows still require later authorized account testing |
 | Full catalog / initial schema | PASS | Authenticated Aburii dashboard plus catalog query: PostgreSQL 17.12, read_only=on, executor postgres, schema CREATE and Auth REFERENCES privileges true; auth.users/auth.uid()/UUID generator exist; expected API roles exist; zero application tables, no aburii schema, no Aburii-prefix functions, no migration-history table |
 | Platform defaults/event triggers | PASS for reviewed behavior | Seven platform event triggers inspected by catalog. Existing public.rls_auto_enable() definition inspected: it applies only to public, not aburii. Public default ACLs are schema-scoped; explicit migration grants/revocations remain required and were tested locally |
 | Auth origin and redirects | FAIL for onboarding/launch | Site URL is http://localhost:3000; redirect allowlist is empty. Approved HTTPS origin is still needed |
 | Auth email delivery/templates | FAIL for onboarding | No custom SMTP; dashboard says default templates are used and custom SMTP is required to edit them. Required /staff/password TokenHash invite/recovery templates are not configured |
 | Password-related settings | REVIEW REQUIRED | Secure email change enabled; secure password change and current-password-on-update disabled. Minimum password value was UI-redacted and was not extracted. Application setup enforces at least 12 characters; hosted policy and session/MFA requirements need separate approval |
-| Recovery protection | REVIEW REQUIRED | Free project has no scheduled project backups. No upgrade, backup creation, restore or billing action was performed; owner must approve a recovery approach before DDL |
+| Recovery protection | BLOCKED for Production | Free project has no scheduled backups. A new synthetic local restore drill passed, but no Production export/restore has run: the private PostgreSQL password is missing. See PRODUCTION-BACKUP-RECOVERY.md. No upgrade/billing/remote restore was performed |
 
 No customer/staff rows, passwords, JWTs or secret keys were displayed. Remote inspection used GET metadata requests, authenticated dashboard reads and catalog-only SQL in BEGIN READ ONLY / ROLLBACK. No migration file was loaded into the remote editor. Only the confirmed Aburii project was inspected; its organization/account display name is shared branding, not evidence of a BiBiChik database connection. No other project was opened.
 
@@ -57,9 +57,9 @@ Capacity protection relies on the RPC-only privilege boundary and transactional 
 
 ## Remaining approval gates
 
-The verified schema is suitable for the fresh 001→002→003 sequence. Public signup/default Auth origin/SMTP/password policy and the publishable-key REST 401 are onboarding/API/launch blockers; they do not require changing the migration files. Investigate the 401 and agree on a recovery approach before final execution approval. No keys should be pasted into chat. API Auth-settings HTTP 200 alone was not sufficient to verify publishable-key Data API access.
+The verified schema is suitable for the fresh 001→002→003 sequence. Public signup/default Auth origin/SMTP/password policy and staff account end-to-end testing are onboarding/API/launch blockers; they do not require changing the migration files. The 401 is resolved as expected protection on OpenAPI metadata. A verified Production backup and actual archive recovery evidence are still required before final execution approval; see `PRODUCTION-BACKUP-RECOVERY.md`. No keys should be pasted into chat. API Auth-settings HTTP 200 alone was not sufficient to verify publishable-key Data API access.
 
-The dashboard displays an active Supabase technical-issue banner. Its relevance to this project was not established; recheck service health before any authorized execution. Do not infer an outage cause for the 401 without evidence.
+The dashboard displays an active Supabase technical-issue banner. Its relevance to this project was not established; recheck service health before any authorized execution. The 401 was subsequently confirmed as deliberate OpenAPI endpoint protection, not an outage or bad key. See the Supabase changelog link below.
 
 ## Exact execution plan — only after final approval
 
@@ -89,3 +89,11 @@ Execute these local files as SQL only after an approved migration in the confirm
 Local SQL tests do not prove the Production database has no private objects, has the same event triggers/default ACLs/Postgres version, or has secure Auth dashboard settings. Production catalog observations are now recorded above. Final live Auth/API behavior, backup/recovery approval and all launch readiness checks remain distinct from the passing schema compatibility review.
 
 References: Supabase [API security](https://supabase.com/docs/guides/api/securing-your-api), [custom schema exposure](https://supabase.com/docs/guides/api/using-custom-schemas), and [read-only Management API query](https://supabase.com/docs/reference/api/v1-read-only-query). Project API keys do not replace trusted dashboard access or an appropriately scoped Management API token for catalog inspection.
+
+## Remaining preflight completion update
+
+API authorization is PASS, with the OpenAPI root restriction explained by Supabase's [documented change](https://supabase.com/changelog/42949-breaking-change-removing-access-to-openapi-spec-via-the-anon-key). The earlier inference that this 401 implied a publishable-key problem was incorrect.
+
+A new isolated recovery drill passed against existing synthetic local data, including effective table/function permissions and RLS. It did not create a Production backup. The real database password is still needed privately in `.env.backup.local` before a full read-only Production export can run; the real archive then needs an isolated compatible restore check. **Current migration decision: NO-GO until that backup/recovery gate passes, followed by explicit migration approval.**
+
+Auth changes and the still-undecided HTTPS origin/redirect/SMTP setup are prepared in `PRODUCTION-AUTH-CHANGE-PLAN.md`; no remote Auth changes were made. The original three migration hashes and their proven fail-closed launch behavior remain unchanged. The passed 89-test suite was not rerun during this remaining preflight.
