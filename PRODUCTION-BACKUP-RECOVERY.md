@@ -4,14 +4,15 @@ Project: `oemwlqisfwrhfxsvuszi` only. No backup/restore command may target BiBiC
 
 ## Current result
 
-- Native tools installed: PostgreSQL 17.11 `pg_dump`, `pg_restore`, `psql`; compatible with the observed Production major version 17 (server 17.12).
-- The new local recovery drill passed: existing synthetic Aburii data was exported/restored to a disposable Unix-socket-only cluster. Reservation/configuration/staff/outbox/audit digests, RLS and effective function/table permissions matched. The source was unchanged. No new reservation requests were created.
-- **No Production database backup exists yet.** The dedicated PostgreSQL password is not configured. API keys do not grant a native PostgreSQL connection. An archive of the local demo database is not a Production backup.
-- A full Production archive must be exported, checked and restored in an isolated compatible environment before this gate can become PASS. The exporter explicitly leaves `productionArchiveRestoreVerified=false` after a successful dump/list check. Do not edit that flag to claim success; attach real restore evidence instead.
+- **Production export: PASS.** A native full database archive and password-free role definitions were exported from the pinned Aburii project through the owner-supplied Session pooler. The PostgreSQL password authenticated successfully and client TLS used verify-full with the downloaded Supabase CA.
+- **Archive integrity: PASS.** The table of contents, entire decompressed payload, SHA-256 hashes and owner-only file permissions were verified. The private checkpoint is `.backups/production-2026-11-17T09-40-57-358Z` (UTC timestamp in its name). No archive SQL was executed during the payload check.
+- **Local synthetic recovery procedure: PASS.** The prior new drill restored existing synthetic data into a disposable Unix-socket-only cluster and matched data digests, RLS and effective permissions without changing the source.
+- **Actual Production archive restoration: BLOCKED.** The archive requires `pg_stat_statements`, `pgcrypto`, `supabase_vault` and `uuid-ossp`. Local PostgreSQL lacks `supabase_vault`; Docker, Podman and Supabase CLI are absent. No sections were omitted or stubbed to claim a full restore. The actual archive still has `productionArchiveRestoreVerified=false`.
+- **Migration execution: NO-GO** until a compatible isolated restore target is selected, the actual archive restore comparison passes, a protected second-copy approach is agreed, and migration-only approval is given. No Production restore/migration/Auth change or invitation occurred.
 
 ## Secure credential handoff
 
-An ignored, owner-only `.env.backup.local` was prepared. Enter the existing Aburii PostgreSQL password privately in `ABURII_BACKUP_DB_PASSWORD`. Do not paste passwords, connection URLs or archive contents into chat. Do not reset a forgotten password without explicit authorization.
+The ignored, owner-only `.env.backup.local` now contains the privately configured PostgreSQL password, the verified Session pooler host and the local CA path. Password authentication has passed. Preserve `ABURII_BACKUP_DB_PASSWORD` privately; Do not paste passwords, connection URLs or archive contents into chat. Do not reset a forgotten password without explicit authorization.
 
 Defaults use the documented direct endpoint, port 5432, database postgres and user postgres. Direct connections may require IPv6. If the network cannot reach it, obtain the **Session pooler** host from the Aburii dashboard Connect dialog and use user `postgres.oemwlqisfwrhfxsvuszi`, port 5432. Do not use the transaction pooler on 6543. The exporter validates both the host family and project-specific username; it never falls back to a generic database URL, service file or another project.
 
@@ -25,7 +26,7 @@ Run only from this Aburii repository, after privately configuring the password:
 node --env-file=.env.backup.local scripts/backup/production.mjs
 ```
 
-The script pins the Aburii target, refuses missing credentials/untrusted file permissions, and forces remote sessions to `default_transaction_read_only=on`. It exports a native full-database custom archive and password-free role definitions, verifies the archive listing, and writes SHA-256 hashes plus metadata to a private manifest. Passwords travel only in the child process environment, never command arguments. Raw PostgreSQL diagnostics are suppressed to avoid logging credentials. All `.backups/` directories are owner-only and ignored by Git; files are owner-only. Failed exports are not a backup PASS.
+The script pins the Aburii target and refuses missing credentials/untrusted file permissions. Its metadata query uses an explicit BEGIN READ ONLY / ROLLBACK, and pg_dump opens its own READ ONLY snapshot. The Session pooler ignores startup PGOPTIONS: relying only on default_transaction_read_only would be incorrect; this was observed and the prerequisite check was corrected without changing remote settings. It exports a native full-database custom archive and password-free role definitions, verifies the archive listing and full payload readability, and writes SHA-256 hashes plus metadata to a private manifest. Passwords travel only in the child process environment, never command arguments. Raw PostgreSQL diagnostics are suppressed to avoid logging credentials. All `.backups/` directories are owner-only and ignored by Git; files are owner-only. Failed exports are not a backup PASS.
 
 `pg_dump` takes a consistent database snapshot. Run the checkpoint just before any approved DDL, with application writes quiesced and no notifications/schedulers active. The application is not deployed/connected to this Production database during preparation.
 
