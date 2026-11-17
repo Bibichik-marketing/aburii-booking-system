@@ -132,3 +132,23 @@ test("WhatsApp actions compose a manual chat only for valid international number
   ])
     assert.equal(whatsappUrl(value), null);
 });
+
+// Pending approval is a presentation of the existing effective Pending status.
+import { activePending, pendingAlerts } from "../lib/pending-approval.mjs";
+test("pending queue includes all dates, orders arrivals, and removes expiry at its exact boundary", () => {
+  const now = Date.parse("2026-11-17T10:00:00Z");
+  const b = (id, starts_at, status = "pending", expires_at = "2026-11-17T11:00:00Z") => ({id, starts_at, status, expires_at});
+  const source = [b("later", "2026-12-01T10:00:00Z"), b("expired", "2026-11-18T10:00:00Z", "pending", new Date(now).toISOString()), b("first", "2026-11-18T10:00:00Z"), b("confirmed", "2026-11-18T10:00:00Z", "confirmed"), b("rejected", "2026-11-18T10:00:00Z", "declined")];
+  assert.deepEqual(activePending(source, now).map(b => b.id), ["first", "later"]);
+  assert.deepEqual(activePending(source, now + 3600000), []);
+  assert.equal(source.length, 5);
+});
+test("sound baseline is silent and repeated polls, removals and navigation do not repeat alerts", () => {
+  const initial = pendingAlerts(null, ["a"]);
+  assert.deepEqual(initial.fresh, []);
+  const next = pendingAlerts(initial.seen, ["a", "b", "c"]);
+  assert.deepEqual(next.fresh, ["b", "c"]);
+  const afterRemoval = pendingAlerts(next.seen, ["c"]);
+  const restoredBrowserState = JSON.parse(JSON.stringify(afterRemoval.seen));
+  assert.deepEqual(pendingAlerts(restoredBrowserState, ["a", "b", "c"]).fresh, []);
+});

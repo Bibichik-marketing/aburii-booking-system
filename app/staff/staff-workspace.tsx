@@ -1,5 +1,8 @@
 "use client";
 import Link from "next/link";
+import { activePending } from "@/lib/pending-approval.mjs";
+import { whatsappUrl } from "@/lib/staff-view.mjs";
+import { usePendingSound } from "./pending-sound";
 import { useEffect, useRef, useState } from "react";
 import { useLanguage } from "@/lib/language";
 import { serviceDay, displayStatus, sortArrivals } from "@/lib/staff-view.mjs";
@@ -11,7 +14,7 @@ import {
   formatDay,
 } from "./components";
 import type { Booking, Data, Decision } from "./components";
-type Page = "dashboard" | "today" | "settings";
+type Page = "dashboard" | "today" | "pending" | "settings";
 type List = { bookings: Booking[]; total: number; page: number; size: number };
 type Daily = { date: string; bookings: Booking[]; occupancy: Booking[] };
 const defaults = {
@@ -28,6 +31,13 @@ const defaults = {
 };
 export default function StaffWorkspace({ page }: { page: Page }) {
   const { t, locale, errorText } = useLanguage();
+  const sound = usePendingSound();
+  const [approvalQueue, setApprovalQueue] = useState<Booking[]>([]);
+  const [confirmedChat, setConfirmedChat] = useState<Booking | null>(null);
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
   const [data, setData] = useState<Data | null>(null),
     [list, setList] = useState<List>({
       bookings: [],
@@ -99,6 +109,15 @@ export default function StaffWorkspace({ page }: { page: Page }) {
         if (id !== sequence.current) return;
         setDaily(result);
       }
+      const approvals: Booking[] = [];
+      for (let n = 1; ; n++) {
+        const result: List = await read(`/api/staff?view=list&status=pending&sort=arrival&order=asc&size=50&page=${n}`);
+        if (id !== sequence.current) return;
+        approvals.push(...result.bookings);
+        if (n * result.size >= result.total) break;
+      }
+      setApprovalQueue(approvals);
+      await sound.observe(activePending(approvals).map(b => b.id));
       if (selectedId.current) {
         const booking = await read(
           "/api/staff?view=detail&id=" + selectedId.current,
@@ -113,6 +132,8 @@ export default function StaffWorkspace({ page }: { page: Page }) {
       if (id !== sequence.current) return;
       if ((e as { status?: number }).status === 401) {
         setData(null);
+        setApprovalQueue([]);
+        setConfirmedChat(null);
         setSelected(null);
         selectedId.current = null;
       } else setError(e instanceof Error ? e.message : "Unable to refresh.");
@@ -125,12 +146,12 @@ export default function StaffWorkspace({ page }: { page: Page }) {
   }
   useEffect(() => {
     void load();
-    const timer = setInterval(() => void load(), 60000);
+    const timer = setInterval(() => void load(), 15000);
     return () => {
       clearInterval(timer);
       sequence.current++;
     };
-  }, [page, params]);
+  }, [page, params, sound.enabled]);
   async function action(payload: Record<string, unknown>) {
     if (mutation.current) return false;
     mutation.current = true;
@@ -148,9 +169,18 @@ export default function StaffWorkspace({ page }: { page: Page }) {
       if (payload.action === "logout") {
         sequence.current++;
         setData(null);
+        setApprovalQueue([]);
+        setConfirmedChat(null);
         setSelected(null);
         selectedId.current = null;
         return true;
+      }
+      if (payload.action === "status") {
+        setApprovalQueue(queue => queue.filter(b => b.id !== payload.id));
+        if (payload.status === "confirmed") {
+          const booking = approvalQueue.find(b => b.id === payload.id);
+          if (booking) setConfirmedChat(booking);
+        }
       }
       await load();
       setMessage(payload.action === "login" ? "Signed in." : "Saved.");
@@ -206,7 +236,7 @@ export default function StaffWorkspace({ page }: { page: Page }) {
             Number(displayStatus(b, now) === "pending") -
             Number(displayStatus(a, now) === "pending"),
         )
-      : list.bookings;
+      : page === "pending" ? activePending(approvalQueue, now) : list.bookings;
   const pending = (daily?.bookings || []).filter(
     (b) => displayStatus(b, now) === "pending",
   );
@@ -222,7 +252,7 @@ export default function StaffWorkspace({ page }: { page: Page }) {
       ? "Dashboard"
       : page === "today"
         ? "Today"
-        : "Settings";
+        : page === "pending" ? "Pending Approval" : "Settings";
   const columns = [
     ["arrival", "Date & time"],
     ["name", "Customer"],
@@ -233,7 +263,7 @@ export default function StaffWorkspace({ page }: { page: Page }) {
   function quickActions(b: Booking) {
     return (
       <div className="compact-row-actions" onClick={(e) => e.stopPropagation()}>
-        {page === "today" && displayStatus(b, now) === "pending" && (
+        {(page === "today" || page === "pending") && displayStatus(b, now) === "pending" && (
           <>
             <button
               className="button compact"
@@ -265,7 +295,7 @@ export default function StaffWorkspace({ page }: { page: Page }) {
             reference: b.reference,
           })}
         >
-          {t("Details")} ↗
+          {t(page === "pending" ? "View Details" : "Details")} ↗
         </button>
       </div>
     );
@@ -324,7 +354,7 @@ export default function StaffWorkspace({ page }: { page: Page }) {
                     ? "All reservations · all dates"
                     : page === "today"
                       ? "Today’s service · Malaysia time"
-                      : "Capacity, hours and booking policies",
+                      : page === "pending" ? "Awaiting approval · all dates" : "Capacity, hours and booking policies",
                 )}
                 {updated && (
                   <span>
@@ -367,6 +397,9 @@ export default function StaffWorkspace({ page }: { page: Page }) {
             >
               {t("Today")}
             </Link>
+            <Link href="/staff/pending" aria-current={page === "pending" ? "page" : undefined}>
+              {t("Pending Approval")} <span className="pending-count" aria-live="polite">{activePending(approvalQueue, now).length}</span>
+            </Link>
             {data.role === "admin" && (
               <Link
                 href="/staff/settings"
@@ -385,6 +418,19 @@ export default function StaffWorkspace({ page }: { page: Page }) {
             <p role="status" className="desk-feedback">
               {t(message)}
             </p>
+          )}
+          <div className="pending-tools">
+            <button className="text-button" onClick={() => void sound.toggle()} aria-pressed={sound.enabled}>
+              {t(sound.enabled ? "Sound notifications on" : "Enable sound notifications")}
+            </button>
+            {sound.failed && <span role="status">{t("Sound unavailable. Please use the live pending badge.")}</span>}
+          </div>
+          {confirmedChat && whatsappUrl(confirmedChat.phone) && (
+            <div className="confirmation-chat" role="status">
+              <span>{t("Reservation confirmed: {reference}", {reference: confirmedChat.reference})}</span>
+              <a className="secondary" href={whatsappUrl(confirmedChat.phone)!} target="_blank" rel="noreferrer">{t("Open WhatsApp")} ↗</a>
+              <button className="text-button" onClick={() => setConfirmedChat(null)}>{t("Dismiss")}</button>
+            </div>
           )}
           {page === "settings" ? (
             data.role === "admin" ? (
@@ -495,7 +541,7 @@ export default function StaffWorkspace({ page }: { page: Page }) {
                     {t("Reset filters")}
                   </button>
                 </form>
-              ) : (
+              ) : page === "today" ? (
                 <>
                   <div
                     className="today-summary"
@@ -535,12 +581,12 @@ export default function StaffWorkspace({ page }: { page: Page }) {
                     </span>
                   </div>
                 </>
-              )}
+              ) : null}
               <div className="list-caption">
                 <span>
                   {page === "today"
                     ? formatDay(today, locale)
-                    : t("{count} reservations", { count: list.total })}
+                    : t("{count} reservations", { count: page === "pending" ? records.length : list.total })}
                 </span>
                 <span>
                   {loading
@@ -630,6 +676,7 @@ export default function StaffWorkspace({ page }: { page: Page }) {
                             </td>
                             <td>
                               <strong>{b.name}</strong>
+                              {page === "pending" && <span>{b.phone}</span>}
                               <span className="reference">
                                 {b.reference}
                                 {b.archived && <> · {t("Archived")}</>}
@@ -682,6 +729,7 @@ export default function StaffWorkspace({ page }: { page: Page }) {
                           {b.reference}
                           {b.archived && <> · {t("Archived")}</>}
                         </span>
+                        {page === "pending" && <p>{b.phone}</p>}
                         <p>
                           {page === "today"
                             ? `${formatTime(b.starts_at, locale)} – ${formatTime(b.ends_at, locale)}`
@@ -702,7 +750,7 @@ export default function StaffWorkspace({ page }: { page: Page }) {
                 </div>
                 {!records.length && !loading && (
                   <p className="empty-reservation-list">
-                    {t("No reservations match these filters.")}
+                    {t(page === "pending" ? "No reservations awaiting approval." : "No reservations match these filters.")}
                   </p>
                 )}
               </section>

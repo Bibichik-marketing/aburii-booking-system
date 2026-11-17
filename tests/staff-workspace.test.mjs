@@ -219,3 +219,19 @@ test("expired pending requests may be archived without materializing a status ch
   );
   assert.equal(list({ p_status: "expired", p_archive: "archived" }).total, 1);
 });
+
+test("Pending Approval uses existing all-date API, excludes expired holds, and removes decisions immediately", () => {
+  const expiry = new Date(Date.now() + 86400000).toISOString();
+  const first = insert({status:"pending", start:"2030-01-02T18:00:00+08:00", expires:expiry});
+  const later = insert({status:"pending", start:"2030-02-02T18:00:00+08:00", expires:expiry, area:"private"});
+  insert({status:"pending", expires:"2000-01-01T00:00:00Z"});
+  insert({status:"confirmed"});
+  const queue = () => list({p_status:"pending", p_sort:"arrival", p_order:"asc", p_size:50});
+  assert.deepEqual(queue().bookings.map(b => b.id), [first, later]);
+  assert.equal(queue().total, 2);
+  for (const field of ["name","phone","reference","starts_at","guests","area"]) assert.ok(Object.hasOwn(queue().bookings[0], field));
+  rpc("aburii_status", `${q(first)},'pending','confirmed'`, staff);
+  assert.deepEqual(queue().bookings.map(b => b.id), [later]);
+  rpc("aburii_status", `${q(later)},'pending','declined'`, staff);
+  assert.equal(queue().total, 0);
+});

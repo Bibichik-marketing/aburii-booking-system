@@ -1926,3 +1926,9 @@ html[lang="zh-CN"] .eyebrow {
     align-items: start;
   }
 }
+
+/* Pending approval shares the existing reservation workspace and responsive list. */
+.workspace-nav { flex-wrap: wrap; column-gap: 24px; row-gap: 0; }
+.pending-count { display: inline-block; min-width: 22px; padding: 2px 6px; margin-left: 4px; border-radius: 12px; background: #f1e5d3; color: #714c23; text-align: center; font-size: 11px; }
+.pending-tools { display: flex; flex-wrap: wrap; gap: 10px; margin: -10px 0 18px; font-size: 12px; color: var(--muted); }
+.confirmation-chat { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; padding: 16px 0; border-bottom: 1px solid var(--line); margin-bottom: 20px; overflow-wrap: anywhere; }
