@@ -14,6 +14,10 @@ npm run dev
 
 Visit http://localhost:3100. The design and staff login page work without configuration; availability and submission fail closed. There are no demo reservations, fake confirmations or assumed seating capacities.
 
+## Development-only Admin login
+
+For the isolated, password-protected local account and synthetic PostgreSQL data, see `LOCAL-DEVELOPMENT.md`. Run `npm run local:setup` once, `npm run local:start` to launch, and `npm run local:credentials` in your own interactive terminal to retrieve the generated password. The login URL is http://localhost:3100/staff. These tools refuse production and do not require or contact a hosted Supabase project.
+
 ## Connect a separate Supabase project
 
 1. Create a **new, empty Aburii-only Supabase project**. Never execute this migration in BiBiChik's project. The migration creates a private `aburii` schema and dedicated `public.aburii_*` RPC functions.

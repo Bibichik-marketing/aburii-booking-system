@@ -1460,3 +1460,13 @@ html[lang="zh-CN"] .eyebrow {
   white-space: nowrap;
   flex-shrink: 0;
 }
+
+.local-development-banner {
+  text-align: center;
+  padding: 10px 18px;
+  border-bottom: 1px solid var(--line);
+  background: #eee0d2;
+  color: var(--accent);
+  font-size: 11px;
+  line-height: 1.7;
+}

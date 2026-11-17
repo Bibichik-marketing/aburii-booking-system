@@ -12,7 +12,12 @@
     "start": "node .next/standalone/server.js",
     "typecheck": "tsc --noEmit",
     "test": "node scripts/test-db.mjs",
-    "notifications": "node scripts/notifications.mjs"
+    "notifications": "node scripts/notifications.mjs",
+    "local:setup": "node scripts/local/setup.mjs",
+    "local:start": "node scripts/local/start.mjs",
+    "local:credentials": "node scripts/local/credentials.mjs",
+    "local:stop-db": "node scripts/local/stop.mjs",
+    "local:check": "node scripts/local/check.mjs"
   },
   "dependencies": {
     "next": "16.4.6",

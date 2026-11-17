@@ -1,7 +1,13 @@
 "use client";
 import Link from "next/link";
 import { useLanguage, LanguageSwitcher } from "@/lib/language";
-export default function Shell({ children }: { children: React.ReactNode }) {
+export default function Shell({
+  children,
+  localDevelopment = false,
+}: {
+  children: React.ReactNode;
+  localDevelopment?: boolean;
+}) {
   const { t } = useLanguage();
   return (
     <>
@@ -26,6 +32,13 @@ export default function Shell({ children }: { children: React.ReactNode }) {
           <LanguageSwitcher />
         </nav>
       </header>
+      {localDevelopment && (
+        <div className="local-development-banner" role="status">
+          {t(
+            "Local development · synthetic data only · no automated messages are sent.",
+          )}
+        </div>
+      )}
       {children}
       <footer>
         <div>

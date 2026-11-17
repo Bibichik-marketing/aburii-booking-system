@@ -12,7 +12,14 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     <html lang="en">
       <body>
         <LanguageProvider>
-          <Shell>{children}</Shell>
+          <Shell
+            localDevelopment={
+              process.env.NODE_ENV === "development" &&
+              process.env.ABURII_LOCAL_DEVELOPMENT === "true"
+            }
+          >
+            {children}
+          </Shell>
         </LanguageProvider>
       </body>
     </html>

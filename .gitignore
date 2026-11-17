@@ -4,3 +4,6 @@ node_modules/
 !.env.example
 *.tsbuildinfo
 artifacts/
+
+# Generated development credentials, sessions and isolated PostgreSQL cluster
+.local-dev/
