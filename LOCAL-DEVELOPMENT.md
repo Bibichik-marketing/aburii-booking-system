@@ -57,3 +57,5 @@ No WhatsApp/email worker is started, and the launcher supplies no provider crede
 The production build, TypeScript checks and all 57 automated tests passed. The normal browser login page was verified with the development banner and without a password being entered by the agent. BiBiChik and production services were not accessed or modified. Nothing was deployed.
 
 Official service windows and the launch gate are documented in `OPERATING-HOURS.md`. Run `npm run local:migrate` for an existing local database. Public booking remains disabled; the local check verifies this without enabling it. Existing synthetic reservations are preserved.
+
+The launcher now injects `ABURII_SUPABASE_PUBLISHABLE_KEY` / `ABURII_SUPABASE_SECRET_KEY` names with its synthetic adapter keys and an explicit loopback-only development flag. Hosted connections require the pinned Aburii project and modern key formats. Production invite/recovery uses real Supabase Auth; see `PRODUCTION-SUPABASE.md`. The local adapter still does not send emails or implement invitation/recovery.

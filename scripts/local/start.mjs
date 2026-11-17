@@ -15,8 +15,8 @@ Object.assign(env, {
   NODE_ENV: "development",
   ABURII_LOCAL_DEVELOPMENT: "true",
   ABURII_SUPABASE_URL: `http://127.0.0.1:${c.apiPort}`,
-  ABURII_SUPABASE_ANON_KEY: c.anonKey,
-  ABURII_SUPABASE_SERVICE_ROLE_KEY: c.serviceKey,
+  ABURII_SUPABASE_PUBLISHABLE_KEY: c.anonKey,
+  ABURII_SUPABASE_SECRET_KEY: c.serviceKey,
   ABURII_RATE_LIMIT_SECRET: c.rateLimitSecret,
   ABURII_SITE_URL: "http://localhost:3100",
 });

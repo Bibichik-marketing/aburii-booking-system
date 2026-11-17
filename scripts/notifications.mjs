@@ -1,8 +1,8 @@
+import { supabaseConfig, supabaseHeaders } from "../lib/supabase-config.mjs";
 // Run from a scheduler every minute. Credentials are read only from environment.
 // Delivery is at-least-once: a provider timeout after acceptance may cause a duplicate.
 const required = [
-  "ABURII_SUPABASE_URL",
-  "ABURII_SUPABASE_SERVICE_ROLE_KEY",
+
   "ABURII_WHATSAPP_ACCESS_TOKEN",
   "ABURII_WHATSAPP_PHONE_NUMBER_ID",
   "ABURII_WHATSAPP_TEMPLATE_NAME",
@@ -14,16 +14,18 @@ if (required.some((k) => !process.env[k])) {
   );
   process.exit(1);
 }
+let connection;
+try { connection = supabaseConfig(); } catch {
+  console.error("Aburii Supabase configuration is missing or invalid; queue was not claimed.");
+  process.exit(1);
+}
 async function rpc(name, args) {
   const r = await fetch(
-    `${process.env.ABURII_SUPABASE_URL}/rest/v1/rpc/${name}`,
+    `${connection.url}/rest/v1/rpc/${name}`,
     {
       method: "POST",
-      headers: {
-        apikey: process.env.ABURII_SUPABASE_SERVICE_ROLE_KEY,
-        Authorization: `Bearer ${process.env.ABURII_SUPABASE_SERVICE_ROLE_KEY}`,
-        "Content-Type": "application/json",
-      },
+      headers: supabaseHeaders(connection, "service"),
+      redirect: "error",
       body: JSON.stringify(args),
       signal: AbortSignal.timeout(15000),
     },

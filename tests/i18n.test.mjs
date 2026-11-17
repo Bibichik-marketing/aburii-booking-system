@@ -38,6 +38,7 @@ test("all literal UI translation keys and dynamic seating descriptions are cover
   const paths = [
     "app/booking.tsx",
     "app/staff/page.tsx",
+    "app/staff/password/page.tsx",
     "app/staff/staff-workspace.tsx",
     "app/staff/components.tsx",
     "app/page.tsx",

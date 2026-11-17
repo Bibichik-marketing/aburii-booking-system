@@ -1,9 +1,11 @@
+import { completeStaffPassword } from "@/lib/staff-password.mjs";
 import { cookies } from "next/headers";
 import { z } from "zod";
 import { configSchema } from "@/lib/schema";
 import {
   rpc,
   supabase,
+  authRequest,
   staffToken,
   guard,
   json,
@@ -118,6 +120,7 @@ export async function POST(req: Request) {
     const p = await json(req);
     const action = z
       .enum([
+        "setup_password",
         "login",
         "logout",
         "refresh",
@@ -127,6 +130,21 @@ export async function POST(req: Request) {
         "archive",
       ])
       .parse(p.action);
+    if (action === "setup_password") {
+      await limit(req, "password_setup");
+      const input = z.object({
+        token_hash: z.string().regex(/^[a-fA-F0-9]{32,128}$/),
+        type: z.enum(["invite", "recovery"]),
+        password: z.string().min(12).max(128),
+      }).parse(p);
+      const session = await completeStaffPassword(input, {
+        auth: authRequest,
+        member: token => rpc("aburii_staff_context", {}, token),
+        user: supabase,
+      });
+      await setSession(session);
+      return reply({ ok: true });
+    }
     if (action === "login") {
       await limit(req, "login");
       const input = z
@@ -135,13 +153,7 @@ export async function POST(req: Request) {
           password: z.string().min(1).max(200),
         })
         .parse(p);
-      const key = process.env.ABURII_SUPABASE_ANON_KEY;
-      if (!key) throw new ApiError("Authentication not configured.", 503);
-      const data = await supabase(
-        "/auth/v1/token?grant_type=password",
-        input,
-        key,
-      );
+      const data = await authRequest("/auth/v1/token?grant_type=password", input);
       await rpc("aburii_staff_data", {}, data.access_token);
       await setSession(data);
       return reply({ ok: true });
@@ -157,12 +169,11 @@ export async function POST(req: Request) {
     if (action === "refresh") {
       await limit(req, "refresh");
       const refresh = (await cookies()).get(names[1])?.value;
-      if (!refresh || !process.env.ABURII_SUPABASE_ANON_KEY)
+      if (!refresh)
         throw new ApiError("Please sign in.", 401);
-      const data = await supabase(
+      const data = await authRequest(
         "/auth/v1/token?grant_type=refresh_token",
         { refresh_token: refresh },
-        process.env.ABURII_SUPABASE_ANON_KEY,
       );
       await rpc("aburii_staff_data", {}, data.access_token);
       await setSession(data);

@@ -22,9 +22,9 @@ For the isolated, password-protected local account and synthetic PostgreSQL data
 
 1. Create a **new, empty Aburii-only Supabase project**. Never execute this migration in BiBiChik's project. The migration creates a private `aburii` schema and dedicated `public.aburii_*` RPC functions.
 2. Execute `supabase/001_aburii.sql`, `supabase/002_staff_workspace.sql`, then `supabase/003_operating_hours.sql` in order in the new project's SQL editor. It is intentionally a one-time, atomic migration, not a destructive reset script.
-3. Set `ABURII_SUPABASE_URL`, `ABURII_SUPABASE_ANON_KEY`, and `ABURII_SUPABASE_SERVICE_ROLE_KEY` in `.env.local` or the hosting environment. Only server code reads these. All variables are prefixed `ABURII_` to avoid accidentally inheriting BiBiChik configuration.
+3. Set `ABURII_SUPABASE_URL`, `ABURII_SUPABASE_PROJECT_REF`, `ABURII_SUPABASE_PUBLISHABLE_KEY`, and `ABURII_SUPABASE_SECRET_KEY` in `.env.local` or the hosting environment. Use the owner-confirmed project `oemwlqisfwrhfxsvuszi`; hosted connections are pinned to it. Legacy keys are rejected. See `PRODUCTION-SUPABASE.md` for the reviewed sequence, secure environment, custom invite/recovery templates and blockers before any remote changes. Only server code reads these. All variables are prefixed `ABURII_` to avoid accidentally inheriting BiBiChik configuration.
 4. Set `ABURII_SITE_URL` to the exact browser origin, with scheme and no trailing slash; e.g. `https://booking.your-aburii-domain.example`. POST requests require that exact Origin. Set `ABURII_RATE_LIMIT_SECRET` to a freshly generated random secret (at least 32 bytes).
-5. In Supabase Auth, disable public signup and invite Aburii's staff. Use Supabase's invitation/recovery flows to establish passwords. No passwords are stored in this project.
+5. In Supabase Auth, disable public signup and invite Aburii's staff. Use the `/staff/password` invitation/recovery flow and custom email templates documented in `PRODUCTION-SUPABASE.md` to establish passwords. No passwords are stored in this project.
 6. In the private SQL editor, register the invited user's UUID:
 
 ```sql

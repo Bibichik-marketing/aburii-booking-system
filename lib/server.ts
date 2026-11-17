@@ -1,3 +1,5 @@
+import "server-only";
+import { supabaseConfig, supabaseHeaders } from "./supabase-config.mjs";
 import { cookies } from "next/headers";
 import { createHmac } from "node:crypto";
 export class ApiError extends Error {
@@ -14,24 +16,21 @@ export async function supabase(
   token?: string,
   method?: string,
 ) {
-  const url = process.env.ABURII_SUPABASE_URL;
-  const key = token
-    ? process.env.ABURII_SUPABASE_ANON_KEY
-    : process.env.ABURII_SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !key)
-    throw new ApiError(
-      "Online reservations are not available yet. Please contact Aburii.",
-      503,
-    );
-  const response = await fetch(`${url}${path}`, {
+  return requestSupabase(path, body, token ? "staff" : "service", token, method);
+}
+export const authRequest = (path: string, body: unknown) =>
+  requestSupabase(path, body, "auth");
+async function requestSupabase(path: string, body: unknown, mode: "staff" | "service" | "auth", token?: string, method?: string) {
+  let config;
+  try { config = supabaseConfig(); } catch {
+    throw new ApiError("Online reservations are not available yet. Please contact Aburii.", 503);
+  }
+  const response = await fetch(`${config.url}${path}`, {
     method: method || (body === undefined ? "GET" : "POST"),
-    headers: {
-      apikey: key,
-      Authorization: `Bearer ${token || key}`,
-      "Content-Type": "application/json",
-    },
+    headers: supabaseHeaders(config, mode, token),
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     cache: "no-store",
+    redirect: "error",
     signal: AbortSignal.timeout(15000),
   });
   if (!response.ok) {
@@ -72,7 +71,15 @@ export async function staffToken() {
 }
 export async function guard(req: Request) {
   const origin = req.headers.get("origin");
-  const expected = process.env.ABURII_SITE_URL || new URL(req.url).origin;
+  const expected = process.env.ABURII_SITE_URL ||
+    (process.env.NODE_ENV === "production" ? undefined : new URL(req.url).origin);
+  if (process.env.NODE_ENV === "production") {
+    try {
+      const site = new URL(expected || "");
+      if (site.protocol !== "https:" || site.origin !== expected || site.username || site.password)
+        throw Error();
+    } catch { throw new ApiError("Request origin denied.", 403); }
+  }
   if (origin !== expected) throw new ApiError("Request origin denied.", 403);
 }
 export async function json(req: Request) {
@@ -100,7 +107,7 @@ export async function json(req: Request) {
 }
 export async function limit(req: Request, scope: string) {
   const secret = process.env.ABURII_RATE_LIMIT_SECRET;
-  if (!secret)
+  if (!secret || secret.length < 32)
     throw new ApiError("Online reservations are not configured.", 503);
   const header = process.env.ABURII_TRUSTED_CLIENT_IP_HEADER;
   const ip = header ? req.headers.get(header) || "unknown" : "shared";

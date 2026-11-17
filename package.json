@@ -18,7 +18,8 @@
     "local:credentials": "node scripts/local/credentials.mjs",
     "local:stop-db": "node scripts/local/stop.mjs",
     "local:check": "node scripts/local/check.mjs",
-    "local:migrate": "node scripts/local/migrate.mjs"
+    "local:migrate": "node scripts/local/migrate.mjs",
+    "production:check": "node scripts/production-check.mjs"
   },
   "dependencies": {
     "next": "16.4.6",

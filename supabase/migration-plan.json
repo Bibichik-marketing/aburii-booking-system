@@ -1,0 +1,17 @@
+{
+  "projectReference": "oemwlqisfwrhfxsvuszi",
+  "migrations": [
+    {
+      "file": "001_aburii.sql",
+      "sha256": "ec7584871659d2a4d8069d59a1fdda7030da87374117c1a80bbde036bace1702"
+    },
+    {
+      "file": "002_staff_workspace.sql",
+      "sha256": "d6334ca4862e876ddda1430601fa98b74c73e783ba83deed7a7c6221186ee01b"
+    },
+    {
+      "file": "003_operating_hours.sql",
+      "sha256": "9618f820855a94ad5d8709cce71582b15599db749e680fa750497697ff9e026f"
+    }
+  ]
+}

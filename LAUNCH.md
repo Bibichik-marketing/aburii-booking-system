@@ -14,3 +14,5 @@ Required external configuration:
 Before opening online availability, verify on the real staging deployment: password invitation/recovery; login/refresh/logout; revoked staff access; cross-origin rejection; last-capacity parallel booking; expiry; room changes; mobile completion; WhatsApp opt-in and provider delivery. Local SQL tests validate database behavior but do not replace Supabase Auth/REST and provider testing.
 
 Scope limits: no payments/deposits, cancellation penalties, customer self-service login, inbound WhatsApp handling, automated emails, staff outbound messages, historical reports, public floor plan or individual seat selection. Admin inventory edits are intentionally conservative while active reservations exist.
+
+Production preparation now pins the owner-confirmed Aburii project `oemwlqisfwrhfxsvuszi`, supports current Supabase publishable/secret keys, and includes an offline migration/configuration preflight plus staff invite/recovery password setup. See `PRODUCTION-SUPABASE.md` for the exact plan and unresolved blockers. No remote migration or deployment has been performed. Keep all public-launch flags false.

@@ -63,6 +63,7 @@ try {
     ["-v", "ON_ERROR_STOP=1", "-f", "supabase/003_operating_hours.sql"],
     { env },
   );
+  run("psql", ["-v", "ON_ERROR_STOP=1", "-f", "supabase/verify_production.sql"], { env });
   const result = spawnSync(
     process.execPath,
     [
@@ -74,6 +75,7 @@ try {
       "tests/i18n.test.mjs",
       "tests/staff-view.test.mjs",
       "tests/local-development.test.mjs",
+      "tests/production-config.test.mjs",
     ],
     { env, stdio: "inherit" },
   );
