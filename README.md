@@ -57,6 +57,8 @@ The server validates JSON sizes and request fields. Availability returns start/e
 
 ## Staff operations
 
+See `STAFF-DASHBOARD.md` for the daily overview, pending queue, detail actions, read-only occupancy timeline and supported editing scope.
+
 The dashboard refreshes every minute and supports service date, area, status and customer/reference/phone search; confirmation, decline, cancellation, seating, completion and no-show; internal room reassignment; and admin settings. It displays up to 2,000 bookings from seven days ago through the booking horizon. Historical reporting and bulk exports are not included. Actions and configuration versions are audited privately.
 
 Auth uses Supabase password authentication with HttpOnly, SameSite=Strict cookies restricted to `/api/staff`. Access tokens expire with the provider session; refresh tokens rotate through the server, remain HttpOnly and have a 12-hour cookie lifetime. Logout attempts provider revocation and clears cookies. Use HTTPS in production. Sensitive responses are `no-store`; no personal information or credentials are logged by the application.

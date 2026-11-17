@@ -1,8 +1,16 @@
 "use client";
-import { useLanguage } from "@/lib/language";
-import { useEffect, useState } from "react";
+import { useLanguage, LanguageSwitcher } from "@/lib/language";
+import { useEffect, useRef, useState } from "react";
 import type { z } from "zod";
 import type { configSchema } from "@/lib/schema";
+import {
+  serviceDay,
+  displayStatus,
+  sortArrivals,
+  availableActions,
+  occupancyRows,
+  whatsappUrl,
+} from "@/lib/staff-view.mjs";
 type Config = z.infer<typeof configSchema>;
 type Booking = {
   id: string;
@@ -29,41 +37,51 @@ type Data = {
   bookings: Booking[];
   notifications: { queued?: number; failed?: number };
 };
+type Decision = { id: string; expected: string; next: string };
+type Action = (payload: Record<string, unknown>) => Promise<boolean>;
 const formatTime = (s: string, locale: string) =>
   new Intl.DateTimeFormat(locale, {
     timeZone: "Asia/Kuala_Lumpur",
     hour: "numeric",
     minute: "2-digit",
   }).format(new Date(s));
-const day = (s: string) =>
-  new Intl.DateTimeFormat("en-CA", {
+const formatDay = (date: string, locale: string) =>
+  new Intl.DateTimeFormat(locale, {
     timeZone: "Asia/Kuala_Lumpur",
+    weekday: "short",
+    day: "numeric",
+    month: "long",
     year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date(s));
-const effectiveStatus = (b: Booking) =>
-  b.status === "pending" && new Date(b.expires_at).getTime() <= Date.now()
-    ? "expired"
-    : b.status;
-const transitions: Record<string, string[]> = {
-  pending: ["confirmed", "declined", "cancelled"],
-  confirmed: ["seated", "no_show", "cancelled"],
-  seated: ["completed", "cancelled", "no_show"],
+  }).format(new Date(`${date}T12:00:00+08:00`));
+const statusLabels: Record<string, string> = {
+  confirmed: "Confirm",
+  declined: "Reject",
+  seated: "Seat guests",
+  completed: "Complete",
+  no_show: "No-show",
+  cancelled: "Cancel",
 };
 export default function Staff() {
   const { t, locale, errorText } = useLanguage();
-  const displayTime = (value: string) => formatTime(value, locale);
-  const [data, setData] = useState<Data | null>(null);
-  const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [checking, setChecking] = useState(true);
-  const [settings, setSettings] = useState(false);
-  const [date, setDate] = useState(day(new Date().toISOString()));
-  const [query, setQuery] = useState("");
-  const [area, setArea] = useState("all");
-  const [status, setStatus] = useState("all");
+  const [data, setData] = useState<Data | null>(null),
+    [error, setError] = useState(""),
+    [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false),
+    [checking, setChecking] = useState(true),
+    [refreshing, setRefreshing] = useState(false);
+  const [view, setView] = useState<"reservations" | "timeline" | "settings">(
+    "reservations",
+  );
+  const [date, setDate] = useState(serviceDay(new Date().toISOString())),
+    [query, setQuery] = useState(""),
+    [area, setArea] = useState("all"),
+    [status, setStatus] = useState("all");
+  const [selected, setSelected] = useState<string | null>(null),
+    [decision, setDecision] = useState<Decision | null>(null),
+    [editing, setEditing] = useState(false);
+  const [now, setNow] = useState(Date.now()),
+    [updated, setUpdated] = useState<string | null>(null);
+  const mutation = useRef(false);
   async function load() {
     let r = await fetch("/api/staff");
     if (r.status === 401) {
@@ -83,12 +101,15 @@ export default function Staff() {
       return;
     }
     setData(await r.json());
+    setNow(Date.now());
+    setUpdated(new Date().toISOString());
   }
   useEffect(() => {
     void load()
       .catch(() => setError("Unable to connect."))
       .finally(() => setChecking(false));
     const timer = setInterval(() => {
+      setNow(Date.now());
       void load().catch(() =>
         setError(
           "Could not refresh. Displayed reservations may be out of date.",
@@ -97,7 +118,19 @@ export default function Staff() {
     }, 60000);
     return () => clearInterval(timer);
   }, []);
+  async function refresh() {
+    setRefreshing(true);
+    try {
+      await load();
+    } catch {
+      setError("Unable to refresh.");
+    } finally {
+      setRefreshing(false);
+    }
+  }
   async function action(payload: Record<string, unknown>) {
+    if (mutation.current) return false;
+    mutation.current = true;
     setBusy(true);
     setError("");
     setMessage("");
@@ -111,14 +144,21 @@ export default function Staff() {
       if (!r.ok) throw Error(result.error);
       if (payload.action === "logout") {
         setData(null);
-        return;
+        setSelected(null);
+        setDecision(null);
+        setView("reservations");
+        return true;
       }
       await load();
       setMessage(payload.action === "login" ? "Signed in." : "Saved.");
+      if (payload.action === "login") window.scrollTo({ top: 0 });
+      return true;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unable to complete request.");
+      return false;
     } finally {
       setBusy(false);
+      mutation.current = false;
     }
   }
   async function login(e: React.SubmitEvent<HTMLFormElement>) {
@@ -130,19 +170,135 @@ export default function Staff() {
       password: f.get("password"),
     });
   }
-  const items =
+  const todayDate = serviceDay(new Date(now).toISOString());
+  const todays =
+    data?.bookings.filter((b) => serviceDay(b.starts_at) === todayDate) || [];
+  const activeToday = todays.filter((b) =>
+    ["pending", "confirmed", "seated", "completed"].includes(
+      displayStatus(b, now),
+    ),
+  );
+  const filtered = sortArrivals(
     data?.bookings.filter(
       (b) =>
-        (!date || day(b.starts_at) === date) &&
+        (!date || serviceDay(b.starts_at) === date) &&
         (area === "all" || b.area === area) &&
-        (status === "all" || effectiveStatus(b) === status) &&
+        (status === "all" || displayStatus(b, now) === status) &&
         `${b.name} ${b.reference} ${b.phone}`
           .toLowerCase()
           .includes(query.toLowerCase()),
-    ) || [];
-  const today = data?.bookings.filter((b) => day(b.starts_at) === date) || [];
+    ) || [],
+  );
+  const pending = filtered.filter((b) => displayStatus(b, now) === "pending");
+  const arrivals = filtered.filter((b) => displayStatus(b, now) !== "pending");
+  const days = [...new Set(arrivals.map((b) => serviceDay(b.starts_at)))];
+  const booking = data?.bookings.find((b) => b.id === selected);
+  function open(b: Booking, edit = false, next?: string) {
+    setSelected(b.id);
+    setEditing(edit);
+    setDecision(next ? { id: b.id, expected: b.status, next } : null);
+    setError("");
+  }
+  function close() {
+    setSelected(null);
+    setDecision(null);
+    setEditing(false);
+  }
+  function todayFilter(value: string) {
+    setDate(todayDate);
+    setStatus(value);
+    setArea("all");
+    setQuery("");
+    setView("reservations");
+  }
+  function card(b: Booking) {
+    const current = displayStatus(b, now);
+    return (
+      <article
+        className={`desk-reservation ${current === "pending" ? "needs-attention" : ""}`}
+        key={b.id}
+      >
+        <div className="arrival-time">
+          <strong>{formatTime(b.starts_at, locale)}</strong>
+          <span>{formatTime(b.ends_at, locale)}</span>
+        </div>
+        <div className="reservation-person">
+          <div className="reservation-name">
+            <h3>{b.name}</h3>
+            <span className={`badge ${current}`}>{t(current)}</span>
+          </div>
+          <span className="reference">{b.reference}</span>
+          <div className="reservation-meta">
+            <span className={`area-label ${b.area}`}>
+              {t(b.area === "counter" ? "Counter Seating" : "Private Room")}
+            </span>
+            <span>
+              {b.guests} {t("guests")}
+            </span>
+            {b.requests && (
+              <span className="request-indicator">{t("Special requests")}</span>
+            )}
+          </div>
+          {current === "pending" && (
+            <p className="hold-warning">
+              {t("Hold expires")} {formatTime(b.expires_at, locale)}
+            </p>
+          )}
+          {b.capacity_committed &&
+            [
+              "completed",
+              "cancelled",
+              "no_show",
+              "expired",
+              "declined",
+            ].includes(current) && (
+              <p>
+                {t("Capacity remains occupied until")}{" "}
+                {formatTime(b.ends_at, locale)}
+              </p>
+            )}
+        </div>
+        <div className="desk-row-actions">
+          {current === "pending" && (
+            <>
+              <button
+                className="button compact"
+                disabled={busy}
+                onClick={() =>
+                  action({
+                    action: "status",
+                    id: b.id,
+                    expected: b.status,
+                    status: "confirmed",
+                  })
+                }
+              >
+                {t("Confirm")}
+              </button>
+              <button
+                className="secondary"
+                disabled={busy}
+                onClick={() => open(b, false, "declined")}
+              >
+                {t("Reject")}
+              </button>
+            </>
+          )}
+          <button
+            className="secondary"
+            onClick={() => open(b)}
+            aria-label={t("View reservation {reference}", {
+              reference: b.reference,
+            })}
+          >
+            {t("Details")} ↗
+          </button>
+        </div>
+      </article>
+    );
+  }
   return (
-    <main id="main" className="staff-main">
+    <main id="main" className="staff-main staff-desk">
       {checking ? (
         <p className="notice">{t("Checking your session…")}</p>
       ) : !data ? (
@@ -176,7 +332,7 @@ export default function Staff() {
             </p>
           )}
           <button className="button submit" disabled={busy}>
-            {busy ? t("Signing in…") : t("Sign in")} <span>↗</span>
+            {busy ? t("Signing in…") : t("Sign in")} ↗
           </button>
         </form>
       ) : (
@@ -190,25 +346,25 @@ export default function Staff() {
               <h1>{t("Reservation desk")}</h1>
               <p className="field-note">
                 {t("All times in Malaysia time · refreshes every minute")}
+                {updated && (
+                  <>
+                    {" "}
+                    ·{" "}
+                    {t("Updated at {time}", {
+                      time: formatTime(updated, locale),
+                    })}
+                  </>
+                )}
               </p>
             </div>
             <div className="staff-actions">
               <button
                 className="secondary"
-                onClick={() =>
-                  void load().catch(() => setError("Unable to refresh."))
-                }
+                disabled={refreshing || busy}
+                onClick={refresh}
               >
-                {t("↻ Refresh")}
+                {refreshing ? t("Refreshing…") : t("↻ Refresh")}
               </button>
-              {data.role === "admin" && (
-                <button
-                  className="secondary"
-                  onClick={() => setSettings(!settings)}
-                >
-                  {settings ? t("Close settings") : t("Booking settings")}
-                </button>
-              )}
               <button
                 className="secondary"
                 disabled={busy}
@@ -218,284 +374,738 @@ export default function Staff() {
               </button>
             </div>
           </div>
-          {error && (
+          {error && !booking && (
             <p className="error" role="alert">
               {errorText(error)}
             </p>
           )}
           {message && (
-            <p className="field-note" role="status">
+            <p className="desk-feedback" role="status">
               {t(message)}
             </p>
           )}
-          {settings && data.role === "admin" && (
+          <section className="desk-overview" aria-label={t("Today at Aburii")}>
+            <div className="overview-caption">
+              <span className="eyebrow">{t("TODAY AT ABURII")}</span>
+              <span>{formatDay(todayDate, locale)}</span>
+            </div>
+            <div className="dashboard-stats">
+              <Stat
+                title={t("Today's Reservations")}
+                value={activeToday.length}
+                hint={t("Active reservations today")}
+                onClick={() => todayFilter("all")}
+              />
+              <Stat
+                title={t("Pending")}
+                value={
+                  todays.filter((b) => displayStatus(b, now) === "pending")
+                    .length
+                }
+                hint={t("Review and respond")}
+                attention
+                onClick={() => todayFilter("pending")}
+              />
+              <Stat
+                title={t("Confirmed")}
+                value={
+                  todays.filter((b) => displayStatus(b, now) === "confirmed")
+                    .length
+                }
+                hint={t("Ready for arrival")}
+                onClick={() => todayFilter("confirmed")}
+              />
+              <Stat
+                title={t("Total Guests")}
+                value={activeToday.reduce((a, b) => a + b.guests, 0)}
+                hint={t("Includes pending requests")}
+              />
+            </div>
+          </section>
+          <nav className="desk-tabs" aria-label={t("Staff navigation")}>
+            <button
+              aria-current={view === "reservations" ? "page" : undefined}
+              onClick={() => setView("reservations")}
+            >
+              {t("Reservations")}
+            </button>
+            <button
+              aria-current={view === "timeline" ? "page" : undefined}
+              onClick={() => {
+                if (!date) setDate(todayDate);
+                setView("timeline");
+              }}
+            >
+              {t("Availability Timeline")}
+            </button>
+            {data.role === "admin" && (
+              <button
+                aria-current={view === "settings" ? "page" : undefined}
+                onClick={() => setView("settings")}
+              >
+                {t("Admin Settings")}
+              </button>
+            )}
+          </nav>
+          {view === "settings" && data.role === "admin" ? (
             <Settings
               key={data.version}
               data={data}
               busy={busy}
-              save={(config) =>
-                action({ action: "config", config, version: data.version })
-              }
+              save={async (config) => {
+                await action({
+                  action: "config",
+                  config,
+                  version: data.version,
+                });
+              }}
             />
-          )}
-          <div className="dashboard-stats">
-            <Stat
-              title={t("RESERVATIONS")}
-              value={
-                today.filter(
-                  (b) =>
-                    !["cancelled", "declined", "expired", "no_show"].includes(
-                      effectiveStatus(b),
-                    ),
-                ).length
-              }
-            />
-            <Stat
-              title={t("EXPECTED GUESTS")}
-              value={today
-                .filter((b) =>
-                  ["confirmed", "seated", "completed"].includes(
-                    effectiveStatus(b),
-                  ),
-                )
-                .reduce((a, b) => a + b.guests, 0)}
-            />
-            <Stat
-              title={t("AWAITING CONFIRMATION")}
-              value={
-                today.filter((b) => effectiveStatus(b) === "pending").length
-              }
-            />
-            <Stat
-              title={t("PRIVATE ROOMS")}
-              value={
-                today.filter(
-                  (b) =>
-                    b.area === "private" &&
-                    ["pending", "confirmed", "seated"].includes(
-                      effectiveStatus(b),
-                    ),
-                ).length
-              }
-            />
-          </div>
-          {data.notifications.failed !== undefined && (
-            <p className={data.notifications.failed ? "error" : "field-note"}>
-              {t("WhatsApp delivery queue: ")}
-              {data.notifications.queued}
-              {t(" waiting ·")} {data.notifications.failed}
-              {t(" exhausted retries.")}{" "}
-              {data.notifications.failed
-                ? t(
-                    "Check the notification worker and provider before resending manually.",
-                  )
-                : ""}
-            </p>
-          )}
-          <div className="toolbar">
-            <label>
-              {t("Service date")}
-              <input
-                type="date"
-                value={date}
-                onInput={(e) => setDate(e.currentTarget.value)}
-                onChange={(e) => setDate(e.target.value)}
-              />
-            </label>
-            <label>
-              {t("Dining area")}
-              <select value={area} onChange={(e) => setArea(e.target.value)}>
-                <option value="all">{t("All areas")}</option>
-                <option value="counter">{t("Counter Seating")}</option>
-                <option value="private">{t("Private Room")}</option>
-              </select>
-            </label>
-            <label>
-              {t("Status")}
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value)}
-              >
-                <option value="all">{t("All statuses")}</option>
-                {[
-                  "pending",
-                  "confirmed",
-                  "seated",
-                  "completed",
-                  "cancelled",
-                  "declined",
-                  "expired",
-                  "no_show",
-                ].map((s) => (
-                  <option key={s} value={s}>
-                    {t(s)}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              {t("Find a reservation")}
-              <input
-                type="search"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                placeholder={t("Name, phone or reference")}
-              />
-            </label>
-          </div>
-          <div className="booking-list">
-            {items.length === 0 ? (
-              <div className="empty-state">
-                <h2>{t("A clear service book.")}</h2>
-                <p>{t("No reservations match these filters.")}</p>
+          ) : (
+            <>
+              <div className="desk-filter-bar">
+                <label>
+                  {t("Service date")}
+                  <input
+                    type="date"
+                    value={date}
+                    onInput={(e) => setDate(e.currentTarget.value)}
+                    onChange={(e) => setDate(e.target.value)}
+                  />
+                </label>
+                <button
+                  className="secondary today-button"
+                  onClick={() => setDate(todayDate)}
+                >
+                  {t("Today")}
+                </button>
+                {view === "reservations" && (
+                  <>
+                    <label>
+                      {t("Dining area")}
+                      <select
+                        value={area}
+                        onChange={(e) => setArea(e.target.value)}
+                      >
+                        <option value="all">{t("All areas")}</option>
+                        <option value="counter">{t("Counter Seating")}</option>
+                        <option value="private">{t("Private Room")}</option>
+                      </select>
+                    </label>
+                    <label>
+                      {t("Status")}
+                      <select
+                        value={status}
+                        onChange={(e) => setStatus(e.target.value)}
+                      >
+                        <option value="all">{t("All statuses")}</option>
+                        {[
+                          "pending",
+                          "confirmed",
+                          "seated",
+                          "completed",
+                          "cancelled",
+                          "declined",
+                          "expired",
+                          "no_show",
+                        ].map((s) => (
+                          <option value={s} key={s}>
+                            {t(s)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="desk-search">
+                      {t("Find a reservation")}
+                      <input
+                        type="search"
+                        value={query}
+                        onChange={(e) => setQuery(e.target.value)}
+                        placeholder={t("Name, phone or reference")}
+                      />
+                    </label>
+                    <button
+                      className="text-button"
+                      onClick={() => {
+                        setDate(todayDate);
+                        setArea("all");
+                        setStatus("all");
+                        setQuery("");
+                      }}
+                    >
+                      {t("Reset filters")}
+                    </button>
+                  </>
+                )}
               </div>
-            ) : (
-              items.map((b) => (
-                <article className="reservation" key={b.id}>
-                  <div>
-                    <span className={`badge ${effectiveStatus(b)}`}>
-                      {t(effectiveStatus(b))}
-                    </span>
-                    <h3>
-                      {b.name}{" "}
-                      <span className="small">
-                        · {b.guests}
-                        {t(" guests")}
-                      </span>
-                    </h3>
-                    <span className="reference">{b.reference}</span>
-                    <p>
-                      <a href={`tel:${b.phone}`}>{b.phone}</a>
-                      {b.email && (
-                        <>
-                          <br />
-                          <a href={`mailto:${b.email}`}>{b.email}</a>
-                        </>
-                      )}
-                    </p>
-                  </div>
-                  <div>
-                    <h3>
-                      {displayTime(b.starts_at)} – {displayTime(b.ends_at)}
-                    </h3>
-                    <p>
-                      {b.area === "counter"
-                        ? t("Counter Seating")
-                        : t("Private Room")}
-                      {b.room &&
-                        ` · ${data.config.rooms.find((r) => r.id === b.room)?.name || b.room}`}
-                    </p>
-                    {b.minimum_spend > 0 && (
+              {view === "timeline" ? (
+                <Timeline
+                  bookings={data.bookings}
+                  config={data.config}
+                  date={date || todayDate}
+                  now={now}
+                />
+              ) : (
+                <>
+                  <section
+                    className="pending-section"
+                    aria-labelledby="pending-heading"
+                  >
+                    <div className="desk-section-heading">
+                      <div>
+                        <span className="eyebrow">{t("ACTION REQUIRED")}</span>
+                        <h2 id="pending-heading">
+                          {t("Pending requests")}{" "}
+                          <span className="count-pill">{pending.length}</span>
+                        </h2>
+                      </div>
                       <p>
-                        {t("Minimum spend RM ")}
-                        {Number(b.minimum_spend).toFixed(2)}
+                        {t(
+                          "Sorted by arrival · confirm before the hold expires",
+                        )}
                       </p>
-                    )}
-                    {effectiveStatus(b) === "pending" && (
-                      <p>
-                        {t("Hold expires ")}
-                        {displayTime(b.expires_at)}
-                      </p>
-                    )}
-                    {b.capacity_committed &&
-                      [
-                        "cancelled",
-                        "declined",
-                        "no_show",
-                        "expired",
-                        "completed",
-                      ].includes(effectiveStatus(b)) && (
-                        <p>
-                          <strong>
-                            {t("Capacity remains occupied until")}{" "}
-                            {displayTime(b.ends_at)}.
-                          </strong>
-                        </p>
-                      )}
-                    {b.requests && (
-                      <p>
-                        <strong>{t("Requests:")}</strong> {b.requests}
-                      </p>
-                    )}
-                  </div>
-                  <div>
-                    <div className="reservation-actions">
-                      {(transitions[effectiveStatus(b)] || []).map((s) => (
-                        <button
-                          key={s}
-                          disabled={busy}
-                          onClick={() =>
-                            action({
-                              action: "status",
-                              id: b.id,
-                              expected: b.status,
-                              status: s,
-                            })
-                          }
-                        >
-                          {s === "confirmed"
-                            ? t("Confirm")
-                            : s === "declined"
-                              ? t("Decline")
-                              : s === "seated"
-                                ? t("Seat guests")
-                                : s === "completed"
-                                  ? t("Complete")
-                                  : s === "no_show"
-                                    ? t("No-show")
-                                    : t("Cancel")}
-                        </button>
-                      ))}
                     </div>
-                    {b.area === "private" &&
-                      new Date(b.starts_at).getTime() > Date.now() &&
-                      ["pending", "confirmed"].includes(effectiveStatus(b)) && (
-                        <label style={{ marginTop: 16 }}>
-                          {t("Internal room assignment")}
-                          <select
-                            aria-label={t("Assign room for {reference}", {
-                              reference: b.reference,
-                            })}
-                            disabled={busy}
-                            value={b.room || ""}
-                            onChange={(e) =>
-                              action({
-                                action: "assign",
-                                id: b.id,
-                                room: e.target.value,
-                              })
-                            }
-                          >
-                            {data.config.rooms
-                              .filter(
-                                (r) => r.enabled && r.capacity >= b.guests,
-                              )
-                              .map((r) => (
-                                <option key={r.id} value={r.id}>
-                                  {r.name}
-                                  {t(" · up to ")}
-                                  {r.capacity}
-                                </option>
-                              ))}
-                          </select>
-                        </label>
-                      )}
-                  </div>
-                </article>
-              ))
-            )}
-          </div>
+                    {pending.length ? (
+                      [
+                        ...new Set(pending.map((b) => serviceDay(b.starts_at))),
+                      ].map((d) => (
+                        <div className="arrival-group" key={d}>
+                          <h3 className="service-day-heading">
+                            {formatDay(d, locale)}
+                          </h3>
+                          <div className="booking-list">
+                            {pending
+                              .filter((b) => serviceDay(b.starts_at) === d)
+                              .map(card)}
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="pending-clear">
+                        {t("No pending requests match these filters.")}
+                      </p>
+                    )}
+                  </section>
+                  <section
+                    className="arrivals-section"
+                    aria-labelledby="arrivals-heading"
+                  >
+                    <div className="desk-section-heading">
+                      <div>
+                        <span className="eyebrow">{t("SERVICE BOOK")}</span>
+                        <h2 id="arrivals-heading">
+                          {t("Arrivals")}{" "}
+                          <span className="count-pill">{arrivals.length}</span>
+                        </h2>
+                      </div>
+                      <p>{t("Grouped by date · earliest arrival first")}</p>
+                    </div>
+                    {days.length ? (
+                      days.map((d) => (
+                        <div className="arrival-group" key={d}>
+                          <h3 className="service-day-heading">
+                            {formatDay(d, locale)}
+                          </h3>
+                          <div className="booking-list">
+                            {arrivals
+                              .filter((b) => serviceDay(b.starts_at) === d)
+                              .map(card)}
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="empty-state">
+                        <h3>{t("A clear service book.")}</h3>
+                        <p>{t("No reservations match these filters.")}</p>
+                      </div>
+                    )}
+                  </section>
+                </>
+              )}
+            </>
+          )}
+          {data.notifications.failed !== undefined && (
+            <details className="notification-health">
+              <summary>
+                {t("Notification delivery")} · {data.notifications.queued}{" "}
+                {t("queued")} · {data.notifications.failed}{" "}
+                {t("need attention")}
+              </summary>
+              <p className={data.notifications.failed ? "error" : "field-note"}>
+                {t("WhatsApp delivery queue: ")}
+                {data.notifications.queued}
+                {t(" waiting ·")} {data.notifications.failed}
+                {t(" exhausted retries.")}{" "}
+                {data.notifications.failed
+                  ? t(
+                      "Check the notification worker and provider before resending manually.",
+                    )
+                  : ""}
+              </p>
+            </details>
+          )}
+          {booking && (
+            <ReservationDetails
+              key={booking.id}
+              booking={booking}
+              config={data.config}
+              now={now}
+              busy={busy}
+              error={error}
+              editing={editing}
+              setEditing={setEditing}
+              decision={decision}
+              setDecision={setDecision}
+              close={close}
+              action={action}
+            />
+          )}
         </>
       )}
     </main>
   );
 }
-function Stat({ title, value }: { title: string; value: number }) {
-  return (
-    <div className="stat">
+function Stat({
+  title,
+  value,
+  hint,
+  attention,
+  onClick,
+}: {
+  title: string;
+  value: number;
+  hint: string;
+  attention?: boolean;
+  onClick?: () => void;
+}) {
+  const content = (
+    <>
       <span>{title}</span>
       <strong>{value}</strong>
-    </div>
+      <small>{hint}</small>
+    </>
+  );
+  return onClick ? (
+    <button
+      className={`stat stat-button ${attention ? "pending-stat" : ""}`}
+      onClick={onClick}
+    >
+      {content}
+    </button>
+  ) : (
+    <div className="stat">{content}</div>
+  );
+}
+function ReservationDetails({
+  booking: b,
+  config,
+  now,
+  busy,
+  error,
+  editing,
+  setEditing,
+  decision,
+  setDecision,
+  close,
+  action,
+}: {
+  booking: Booking;
+  config: Config;
+  now: number;
+  busy: boolean;
+  error: string;
+  editing: boolean;
+  setEditing: (value: boolean) => void;
+  decision: Decision | null;
+  setDecision: (value: Decision | null) => void;
+  close: () => void;
+  action: Action;
+}) {
+  const { t, locale, errorText } = useLanguage();
+  const dialog = useRef<HTMLDialogElement>(null);
+  const [room, setRoom] = useState(b.room || "");
+  useEffect(() => {
+    const el = dialog.current;
+    el?.showModal();
+    return () => el?.close();
+  }, []);
+  useEffect(() => setRoom(b.room || ""), [b.room]);
+  const current = displayStatus(b, now),
+    canEdit =
+      b.area === "private" &&
+      Date.parse(b.starts_at) > now &&
+      ["pending", "confirmed"].includes(current);
+  const chat = whatsappUrl(b.phone);
+  const actions = availableActions(b, now);
+  async function saveRoom(e: React.SubmitEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (await action({ action: "assign", id: b.id, room })) setEditing(false);
+  }
+  async function confirmDecision() {
+    if (
+      decision &&
+      (await action({
+        action: "status",
+        id: decision.id,
+        expected: decision.expected,
+        status: decision.next,
+      }))
+    )
+      setDecision(null);
+  }
+  return (
+    <dialog
+      ref={dialog}
+      className="reservation-dialog"
+      aria-labelledby="detail-title"
+      onCancel={(e) => {
+        e.preventDefault();
+        if (!busy) close();
+      }}
+    >
+      <div className="dialog-header">
+        <span className="eyebrow">{t("Reservation details")}</span>
+        <LanguageSwitcher />
+        <button
+          className="dialog-close"
+          autoFocus
+          disabled={busy}
+          onClick={close}
+          aria-label={t("Close reservation details")}
+        >
+          ×
+        </button>
+      </div>
+      <div className="dialog-body">
+        <div className="detail-heading">
+          <div>
+            <span className="reference">{b.reference}</span>
+            <h2 id="detail-title">{b.name}</h2>
+          </div>
+          <span className={`badge ${current}`}>{t(current)}</span>
+        </div>
+        <div className={`detail-area ${b.area}`}>
+          <span>{t("Dining area")}</span>
+          <strong>
+            {t(b.area === "counter" ? "Counter Seating" : "Private Room")}
+          </strong>
+          {b.room && (
+            <small>
+              {config.rooms.find((r) => r.id === b.room)?.name || b.room}
+            </small>
+          )}
+        </div>
+        <dl className="detail-facts">
+          <dt>{t("Service date")}</dt>
+          <dd>{formatDay(serviceDay(b.starts_at), locale)}</dd>
+          <dt>{t("When")}</dt>
+          <dd>
+            {formatTime(b.starts_at, locale)} – {formatTime(b.ends_at, locale)}
+          </dd>
+          <dt>{t("Guests")}</dt>
+          <dd>{b.guests}</dd>
+          <dt>{t("Phone / WhatsApp")}</dt>
+          <dd>
+            <a href={`tel:${b.phone}`}>{b.phone}</a>
+          </dd>
+          {b.email && (
+            <>
+              <dt>{t("Email")}</dt>
+              <dd>
+                <a href={`mailto:${b.email}`}>{b.email}</a>
+              </dd>
+            </>
+          )}
+          {b.minimum_spend > 0 && (
+            <>
+              <dt>{t("Minimum spend")}</dt>
+              <dd>RM {Number(b.minimum_spend).toFixed(2)}</dd>
+            </>
+          )}
+        </dl>
+        {b.requests && (
+          <div className="detail-requests">
+            <h3>{t("Special requests")}</h3>
+            <p>{b.requests}</p>
+          </div>
+        )}
+        {current === "pending" && (
+          <p className="notice">
+            {t("Hold expires")} {formatTime(b.expires_at, locale)}
+          </p>
+        )}
+        {b.capacity_committed && (
+          <p className="field-note">
+            {t("Capacity remains occupied until")}{" "}
+            {formatTime(b.ends_at, locale)}.
+          </p>
+        )}
+        {error && (
+          <p className="error" role="alert">
+            {errorText(error)}
+          </p>
+        )}
+        <div className="detail-action-grid">
+          {actions.includes("confirmed") && (
+            <button
+              className="button"
+              disabled={busy}
+              onClick={() =>
+                action({
+                  action: "status",
+                  id: b.id,
+                  expected: b.status,
+                  status: "confirmed",
+                })
+              }
+            >
+              {t("Confirm")}
+            </button>
+          )}
+          {actions.includes("declined") && (
+            <button
+              className="secondary reject-action"
+              disabled={busy}
+              onClick={() =>
+                setDecision({ id: b.id, expected: b.status, next: "declined" })
+              }
+            >
+              {t("Reject")}
+            </button>
+          )}
+          <button
+            className="secondary"
+            disabled={!canEdit || busy}
+            onClick={() => setEditing(!editing)}
+            title={
+              !canEdit
+                ? t("Only future private-room assignments can be edited.")
+                : t("Edit room assignment")
+            }
+          >
+            {t("Edit")}
+          </button>
+          {chat && (
+            <a
+              className="secondary whatsapp-action"
+              href={chat}
+              target="_blank"
+              rel="noreferrer"
+            >
+              WhatsApp ↗
+            </a>
+          )}
+        </div>
+        <p className="field-note">
+          {t(
+            "WhatsApp opens a manual chat. Automated reservation notifications are unchanged.",
+          )}
+        </p>
+        {editing && canEdit && (
+          <form className="room-editor" onSubmit={saveRoom}>
+            <h3>{t("Edit room assignment")}</h3>
+            <p className="field-note">
+              {t("Guest details, party size and dining times are read-only.")}
+            </p>
+            <label>
+              {t("Internal room assignment")}
+              <select
+                value={room}
+                onChange={(e) => setRoom(e.target.value)}
+                disabled={busy}
+              >
+                {config.rooms
+                  .filter((r) => r.enabled && r.capacity >= b.guests)
+                  .map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name} · {r.capacity} {t("guests")}
+                    </option>
+                  ))}
+              </select>
+            </label>
+            <div className="staff-actions">
+              <button
+                className="button compact"
+                disabled={busy || room === b.room}
+              >
+                {t("Save room assignment")}
+              </button>
+              <button
+                type="button"
+                className="secondary"
+                disabled={busy}
+                onClick={() => {
+                  setEditing(false);
+                  setRoom(b.room || "");
+                }}
+              >
+                {t("Discard changes")}
+              </button>
+            </div>
+            <p className="field-note">
+              {t("Room availability is checked again when you save.")}
+            </p>
+          </form>
+        )}
+        {!canEdit && (
+          <p className="field-note">
+            {t("Only future private-room assignments can be edited.")}
+          </p>
+        )}
+        {decision && (
+          <section
+            className="decision-panel"
+            aria-label={t("Confirm status change")}
+          >
+            <h3>
+              {t("Change reservation to {status}?", {
+                status: t(decision.next),
+              })}
+            </h3>
+            <p>
+              {t(
+                "A pre-start cancellation or rejection releases capacity. After the scheduled start, the original interval stays reserved.",
+              )}
+            </p>
+            <div className="staff-actions">
+              <button
+                className="button compact"
+                disabled={busy}
+                onClick={confirmDecision}
+              >
+                {busy ? t("Saving…") : t("Confirm change")}
+              </button>
+              <button
+                className="secondary"
+                disabled={busy}
+                onClick={() => setDecision(null)}
+              >
+                {t("Keep reservation")}
+              </button>
+            </div>
+          </section>
+        )}
+        {actions.filter((s) => !["confirmed", "declined"].includes(s)).length >
+          0 && (
+          <div className="service-actions">
+            <h3>{t("Service actions")}</h3>
+            <div className="staff-actions">
+              {actions
+                .filter((s) => !["confirmed", "declined"].includes(s))
+                .map((s) => (
+                  <button
+                    className="secondary"
+                    key={s}
+                    disabled={busy}
+                    onClick={() => {
+                      if (["cancelled", "no_show"].includes(s))
+                        setDecision({ id: b.id, expected: b.status, next: s });
+                      else
+                        void action({
+                          action: "status",
+                          id: b.id,
+                          expected: b.status,
+                          status: s,
+                        });
+                    }}
+                  >
+                    {t(statusLabels[s])}
+                  </button>
+                ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </dialog>
+  );
+}
+function Timeline({
+  bookings,
+  config,
+  date,
+  now,
+}: {
+  bookings: Booking[];
+  config: Config;
+  date: string;
+  now: number;
+}) {
+  const { t, locale } = useLanguage();
+  const rows = occupancyRows(bookings, date, now);
+  return (
+    <section className="occupancy-section" aria-labelledby="timeline-title">
+      <div className="desk-section-heading">
+        <div>
+          <span className="eyebrow">{t("READ ONLY")}</span>
+          <h2 id="timeline-title">{t("Availability Timeline")}</h2>
+        </div>
+        <span className="readonly-label">{t("Occupancy view")}</span>
+      </div>
+      <p className="field-note">
+        {t(
+          "Original dining intervals, including retained capacity after cancellation or no-show. This is an occupancy view, not bookable availability.",
+        )}
+      </p>
+      <p className="field-note">
+        {t("All capacity and operating-hour settings are in Admin Settings.")}
+      </p>
+      <p className="timeline-day">
+        {formatDay(date, locale)} · {t("Malaysia time (UTC+8)")}
+      </p>
+      <div className="timeline-scroll">
+        <div className="timeline-chart">
+          <div className="timeline-axis">
+            <span />
+            {["00:00", "06:00", "12:00", "18:00", "24:00"].map((time) => (
+              <span key={time}>{time}</span>
+            ))}
+          </div>
+          {(["counter", "private"] as const).map((area) => (
+            <div className="timeline-area" key={area}>
+              <h3>
+                {t(area === "counter" ? "Counter Seating" : "Private Room")}
+              </h3>
+              {rows.filter((r) => r.booking.area === area).length ? (
+                rows
+                  .filter((r) => r.booking.area === area)
+                  .map(({ booking: b, left, width }) => (
+                    <div className="timeline-row" key={b.id}>
+                      <div className="timeline-row-label">
+                        <strong>{b.name}</strong>
+                        <span>
+                          {b.guests} {t("guests")} · {t(displayStatus(b, now))}
+                          {b.room &&
+                            ` · ${config.rooms.find((r) => r.id === b.room)?.name || b.room}`}
+                        </span>
+                      </div>
+                      <div className="timeline-track">
+                        <div
+                          className={`occupancy-bar ${area} ${displayStatus(b, now)}`}
+                          style={{ left: `${left}%`, width: `${width}%` }}
+                          title={`${b.reference} · ${formatTime(b.starts_at, locale)} – ${formatTime(b.ends_at, locale)}`}
+                        >
+                          <span>
+                            {formatTime(b.starts_at, locale)} –{" "}
+                            {formatTime(b.ends_at, locale)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+              ) : (
+                <p className="timeline-empty">
+                  {t("No capacity commitments for this area.")}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+      <p className="field-note">
+        {t(
+          "Includes all capacity commitments for this day, independent of reservation search filters. Overnight intervals are clipped to the selected day.",
+        )}
+      </p>
+    </section>
   );
 }
 function Settings({

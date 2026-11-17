@@ -60,6 +60,7 @@ try {
       "--test-concurrency=1",
       "tests/database.test.mjs",
       "tests/i18n.test.mjs",
+      "tests/staff-view.test.mjs",
     ],
     { env, stdio: "inherit" },
   );
