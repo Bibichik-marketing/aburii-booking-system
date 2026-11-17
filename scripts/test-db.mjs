@@ -50,6 +50,7 @@ try {
     ],
     { env },
   );
+  run("psql", ["-v", "ON_ERROR_STOP=1", "-f", "supabase/inspect_production.sql"], { env });
   run("psql", ["-v", "ON_ERROR_STOP=1", "-f", "supabase/001_aburii.sql"], {
     env,
   });
@@ -64,6 +65,7 @@ try {
     { env },
   );
   run("psql", ["-v", "ON_ERROR_STOP=1", "-f", "supabase/verify_production.sql"], { env });
+  run("psql", ["-v", "ON_ERROR_STOP=1", "-f", "supabase/verify_production_full.sql"], { env });
   const result = spawnSync(
     process.execPath,
     [

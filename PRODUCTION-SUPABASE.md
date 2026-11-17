@@ -1,5 +1,9 @@
 # Aburii Production Supabase preparation
 
+## Latest inspection
+
+See `PRODUCTION-MIGRATION-REVIEW.md` for the 2026-11-17 authenticated read-only Production catalog/Auth review and exact approval plan. Keys are now privately configured; the application schema is fresh and compatible. Public signup/default Auth origin/SMTP setup, publishable-key REST access and recovery readiness still need review. No Production migrations were executed. The original preparation notes below describe the state before that inspection.
+
 ## Confirmed project and current state
 
 Owner-confirmed project reference: **oemwlqisfwrhfxsvuszi**. API origin: **https://oemwlqisfwrhfxsvuszi.supabase.co**. This reference is public, not a credential.
@@ -88,7 +92,7 @@ All three flags remain **false**: `publicBookingsEnabled`, `capacitiesConfirmed`
 
 Counter Seating and Private Room retain independent capacity checks and transactional locking. Official hours remain Monday closed, Tue–Fri dinner 18:00–22:30, Sat/Sun lunch 12:00–14:30 and dinner 18:00–22:30, Asia/Kuala_Lumpur. Durations/arrival intervals stay configurable and bookings cannot cross service end. Post-start capacity commitments, pending expiry, status actions, permissions, archives, audits and WhatsApp workflow are unchanged. No migration file was edited during production preparation.
 
-## Blockers before remote migration / launch
+## Initial preparation blockers (superseded by the latest inspection above)
 
 - Keys from the confirmed Aburii project have not been provided through a secure environment; opaque-key ownership is unverified.
 - Approved application HTTPS origin is not supplied; there is no approved deployed target for Auth emails/redirects.
