@@ -1,3 +1,4 @@
+import { officialHours, launchDefaults } from "../lib/operating-hours.mjs";
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
@@ -39,8 +40,18 @@ function asyncSql(s) {
   });
 }
 const date = () =>
-  sql("select ((now() at time zone 'Asia/Kuala_Lumpur')::date+2)::text");
+  sql(
+    "select ((now() at time zone 'Asia/Kuala_Lumpur')::date+2+case when extract(dow from (now() at time zone 'Asia/Kuala_Lumpur')::date+2)=1 then 1 else 0 end)::text",
+  );
 const config = () => ({
+  ...launchDefaults,
+  publicBookingsEnabled: true,
+  capacitiesConfirmed: true,
+  policiesConfirmed: true,
+  operatingHours: officialHours.map((d) => ({
+    ...d,
+    periods: d.day === 1 ? [] : [{ start: "00:00", end: "23:59" }],
+  })),
   counter: {
     enabled: true,
     capacity: 6,
@@ -412,6 +423,14 @@ test("database rejects incomplete configuration and invalid customer input", () 
   assert.equal(sql("select count(*) from aburii.bookings"), "0");
 });
 
+function serviceDayForTest(s) {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kuala_Lumpur",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(s));
+}
 // Build a real current dining interval, then attempt a configured overlapping booking.
 function startedBooking(
   area,
@@ -432,6 +451,18 @@ function startedBooking(
     ),
   );
   const c = config();
+  c[area].duration = 15;
+  if (new Date(service.date + "T12:00:00+08:00").getUTCDay() === 1) {
+    service.start = new Date(
+      Date.parse(service.start) + 86400000,
+    ).toISOString();
+    service.date = serviceDayForTest(service.start);
+  }
+  service.time = service.time.slice(0, 2) + ":00";
+  service.start = `${service.date}T${service.time}:00+08:00`;
+  sql(
+    `update aburii.bookings set ends_at=${quote(service.start)}::timestamptz+interval '3 hours' where id='${p.id}'`,
+  );
   c.services = [{ date: service.date, area, times: [service.time] }];
   configure(c);
   return {
@@ -500,11 +531,20 @@ test("staff cannot reassign a private room once its scheduled interval starts", 
     rpc("aburii_assign", `'${p.id}','large'`, "authenticated", staff),
   );
 });
-test('an overlapping room cannot be reassigned into a post-start cancelled room',()=>{
- const {p,overlap}=startedBooking('private');status(p,'cancelled','confirmed');const other={...overlap,guests:2};book(other);
- assert.throws(()=>rpc('aburii_assign',`'${other.id}','large'`,'authenticated',staff));
+test("an overlapping room cannot be reassigned into a post-start cancelled room", () => {
+  const { p, overlap } = startedBooking("private");
+  status(p, "cancelled", "confirmed");
+  const other = { ...overlap, guests: 2 };
+  book(other);
+  assert.throws(() =>
+    rpc("aburii_assign", `'${other.id}','large'`, "authenticated", staff),
+  );
 });
-for(const area of ['counter','private'])test(`${area}: pre-start release remains released after original start passes`,()=>{
- const {p,overlap}=startedBooking(area);sql(`update aburii.bookings set status='cancelled',capacity_released_at=starts_at-interval '1 minute' where id='${p.id}'`);
- assert.equal(book(overlap).status,'pending');
-});
+for (const area of ["counter", "private"])
+  test(`${area}: pre-start release remains released after original start passes`, () => {
+    const { p, overlap } = startedBooking(area);
+    sql(
+      `update aburii.bookings set status='cancelled',capacity_released_at=starts_at-interval '1 minute' where id='${p.id}'`,
+    );
+    assert.equal(book(overlap).status, "pending");
+  });

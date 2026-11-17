@@ -62,6 +62,31 @@ export const configSchema = z
           ),
       )
       .max(800),
+    hoursPolicyVersion: z.literal("aburii-official-v1").optional(),
+    arrivalInterval: z.number().int().min(5).max(120),
+    publicBookingsEnabled: z.boolean(),
+    capacitiesConfirmed: z.boolean(),
+    policiesConfirmed: z.boolean(),
+    operatingHours: z
+      .array(
+        z
+          .object({
+            day: z.number().int().min(0).max(6),
+            periods: z
+              .array(
+                z
+                  .object({
+                    start: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+                    end: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+                  })
+                  .refine((p) => p.end > p.start),
+              )
+              .max(4),
+          })
+          .refine((d) => d.day !== 1 || d.periods.length === 0),
+      )
+      .length(7)
+      .refine((days) => new Set(days.map((d) => d.day)).size === 7),
     closures: z
       .array(
         z
@@ -75,6 +100,16 @@ export const configSchema = z
       .max(500),
   })
   .strict()
+  .refine(
+    (c) =>
+      !c.publicBookingsEnabled ||
+      (c.capacitiesConfirmed &&
+        c.policiesConfirmed &&
+        (c.counter.enabled || c.private.enabled) &&
+        (!c.counter.enabled || c.counter.capacity > 0) &&
+        (!c.private.enabled || c.rooms.some((r) => r.enabled))),
+    "Confirm capacity and policies before enabling bookings",
+  )
   .refine(
     (x) => new Set(x.rooms.map((r) => r.id)).size === x.rooms.length,
     "Room IDs must be unique",

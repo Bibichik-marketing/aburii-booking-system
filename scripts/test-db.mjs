@@ -58,6 +58,11 @@ try {
     ["-v", "ON_ERROR_STOP=1", "-f", "supabase/002_staff_workspace.sql"],
     { env },
   );
+  run(
+    "psql",
+    ["-v", "ON_ERROR_STOP=1", "-f", "supabase/003_operating_hours.sql"],
+    { env },
+  );
   const result = spawnSync(
     process.execPath,
     [
@@ -65,6 +70,7 @@ try {
       "--test-concurrency=1",
       "tests/database.test.mjs",
       "tests/staff-workspace.test.mjs",
+      "tests/operating-hours.test.mjs",
       "tests/i18n.test.mjs",
       "tests/staff-view.test.mjs",
       "tests/local-development.test.mjs",

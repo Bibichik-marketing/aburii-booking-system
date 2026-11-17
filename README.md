@@ -21,7 +21,7 @@ For the isolated, password-protected local account and synthetic PostgreSQL data
 ## Connect a separate Supabase project
 
 1. Create a **new, empty Aburii-only Supabase project**. Never execute this migration in BiBiChik's project. The migration creates a private `aburii` schema and dedicated `public.aburii_*` RPC functions.
-2. Execute `supabase/001_aburii.sql` followed by `supabase/002_staff_workspace.sql` once in the new project's SQL editor. It is intentionally a one-time, atomic migration, not a destructive reset script.
+2. Execute `supabase/001_aburii.sql`, `supabase/002_staff_workspace.sql`, then `supabase/003_operating_hours.sql` in order in the new project's SQL editor. It is intentionally a one-time, atomic migration, not a destructive reset script.
 3. Set `ABURII_SUPABASE_URL`, `ABURII_SUPABASE_ANON_KEY`, and `ABURII_SUPABASE_SERVICE_ROLE_KEY` in `.env.local` or the hosting environment. Only server code reads these. All variables are prefixed `ABURII_` to avoid accidentally inheriting BiBiChik configuration.
 4. Set `ABURII_SITE_URL` to the exact browser origin, with scheme and no trailing slash; e.g. `https://booking.your-aburii-domain.example`. POST requests require that exact Origin. Set `ABURII_RATE_LIMIT_SECRET` to a freshly generated random secret (at least 32 bytes).
 5. In Supabase Auth, disable public signup and invite Aburii's staff. Use Supabase's invitation/recovery flows to establish passwords. No passwords are stored in this project.
@@ -34,7 +34,7 @@ values ('REPLACE_WITH_ABURII_AUTH_USER_UUID', 'admin');
 
 Roles are `admin`, `manager`, `staff`. All active staff can inspect reservations, transition status and assign compatible rooms. Only admins can configure inventory and policies. Managers/admins also see notification queue health. Role checks read the database on every staff RPC; disabling `active` revokes staff capabilities even for an existing token. Provisioning and role administration use trusted Supabase access, not a public registration screen.
 
-7. Sign in at `/staff`, open Booking settings, and enter **verified** counter capacity, party limits, room inventory, dining durations, service start times, advance notice, horizon and hold duration. Enable each area when ready. Defaults are illustrative policy values and both areas are disabled; there are no room or service defaults.
+7. Sign in at `/staff`, open Booking settings, and enter **verified** counter capacity, party limits, room inventory, dining durations, service start times, advance notice, horizon and hold duration. Enable each area when ready. Official weekly service hours are prefilled; durations and arrival intervals remain configurable. There are no assumed production seat or room capacities. Public bookings stay disabled until an Admin confirms actual capacities and approved policies, then explicitly enables public bookings. See `OPERATING-HOURS.md`.
 8. Approve the text in `app/policies/page.tsx` before enabling live bookings, replace the `2026-11-draft` policy version in the migration for a fresh installation (or a separately reviewed forward migration if already deployed), and establish a personal-data retention policy. See `LAUNCH.md`.
 
 ## Languages

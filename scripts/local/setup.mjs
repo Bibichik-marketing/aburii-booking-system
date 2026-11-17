@@ -1,3 +1,4 @@
+import { officialHours, launchDefaults } from "../../lib/operating-hours.mjs";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
@@ -92,6 +93,14 @@ sqlSync(
   c,
   "insert into local_auth.metadata(key,value) values('migration:002_staff_workspace','applied') on conflict(key) do nothing;",
 );
+sqlSync(
+  c,
+  readFileSync(join(root, "supabase/003_operating_hours.sql"), "utf8"),
+);
+sqlSync(
+  c,
+  "insert into local_auth.metadata(key,value) values('migration:003_operating_hours','applied') on conflict(key) do nothing;",
+);
 const id = randomUUID(),
   email = "admin@aburii.test",
   password = randomBytes(24).toString("base64url"),
@@ -101,7 +110,13 @@ sqlSync(
   `begin;insert into auth.users values(${literal(id)}::uuid);insert into local_auth.users values(${literal(id)}::uuid,${literal(email)},${literal(passwordHash(password, salt))},${literal(salt)});insert into aburii.staff(user_id,role) values(${literal(id)}::uuid,'admin');commit;`,
 );
 // Entirely synthetic inventory; never represents the restaurant's actual capacities.
+const settingsVersion = sqlSync(
+  c,
+  "select version from aburii.settings where id;",
+);
 const inventory = {
+  ...launchDefaults,
+  operatingHours: officialHours,
   counter: {
     enabled: true,
     capacity: 16,
@@ -125,19 +140,23 @@ const inventory = {
   noticeMinutes: 30,
   advanceDays: 30,
   holdMinutes: 120,
-  services: ["counter", "private"].flatMap((area) =>
-    Array.from({ length: 7 }, (_, day) => ({
-      day,
-      area,
-      times: ["12:00", "14:00", "18:00", "20:00"],
-    })),
-  ),
+  services: [],
   closures: [],
 };
 sqlSync(
   c,
-  `begin;set local role authenticated;set local request.jwt.claim.sub=${literal(id)};select public.aburii_configure(${literal(JSON.stringify(inventory))}::jsonb,1);commit;`,
+  `begin;set local role authenticated;set local request.jwt.claim.sub=${literal(id)};select public.aburii_configure(${literal(JSON.stringify(inventory))}::jsonb,${settingsVersion});commit;`,
 );
+// Derive synthetic example intervals from approved service windows, without opening public bookings.
+function sampleStart(direction, earliestDay) {
+  return sqlSync(
+    c,
+    `with days as (select ((clock_timestamp() at time zone 'Asia/Kuala_Lumpur')::date+n)::date d from generate_series(${direction === "past" ? -8 : earliestDay},${direction === "past" ? 0 : 8}) n), periods as (select d,p from days cross join lateral jsonb_array_elements(aburii.official_hours()) h cross join lateral jsonb_array_elements(h->'periods') p where (h->>'day')::integer=extract(dow from d)::integer), candidates as (select generate_series((d::text||'T'||(p->>'start')||':00+08:00')::timestamptz,(d::text||'T'||(p->>'end')||':00+08:00')::timestamptz-interval '2 hours',interval '30 minutes') s from periods) select s from candidates where ${direction === "past" ? "s+interval '2 hours'<=clock_timestamp()" : "s>clock_timestamp()+interval '30 minutes'"} order by s ${direction === "past" ? "desc" : "asc"} limit 1;`,
+  );
+}
+const futureExample = sampleStart("future", 0),
+  laterExample = sampleStart("future", 1),
+  pastExample = sampleStart("past", 0);
 // Populate today's and tomorrow's service book with reserved .invalid email addresses.
 for (const [index, status] of [
   "pending",
@@ -148,16 +167,18 @@ for (const [index, status] of [
   "pending",
 ].entries()) {
   const starts =
-    status === "completed"
-      ? "date_trunc('hour',clock_timestamp())-interval '3 hours'"
-      : index === 5
-        ? "((clock_timestamp() at time zone 'Asia/Kuala_Lumpur')::date+1+time '18:00') at time zone 'Asia/Kuala_Lumpur'"
-        : "date_trunc('hour',clock_timestamp())+interval '2 hours'";
+    literal(
+      status === "completed"
+        ? pastExample
+        : index === 5
+          ? laterExample
+          : futureExample,
+    ) + "::timestamptz";
   const area = index % 2 ? "counter" : "private",
     room =
       area === "private" ? (index === 0 ? "dev-sakura" : "dev-kaede") : null;
   // Sequential synthetic intervals avoid inconsistent room allocations.
-  const offset = area === "private" ? index * 2 : 0;
+  const offset = 0;
   sqlSync(
     c,
     `insert into aburii.bookings(id,reference,area,room,starts_at,ends_at,guests,name,phone,email,requests,status,expires_at,capacity_released_at,request_hash,minimum_spend,whatsapp)

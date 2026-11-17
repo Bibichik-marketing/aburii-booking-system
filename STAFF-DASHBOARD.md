@@ -34,7 +34,7 @@ Today has a collapsed, read-only occupancy timeline below its single management 
 
 For a new Aburii Supabase project, apply `001_aburii.sql` then `002_staff_workspace.sql`. For an existing Aburii environment, apply only `002_staff_workspace.sql` through trusted database administration before serving this UI. This task applied it only to the already-isolated local development database; no production database was contacted.
 
-Local setup now includes both migrations. Existing local accounts and data can be preserved with:
+Local setup includes migrations 001–003. Migration 003 adds official service windows and the public-booking readiness gate; see `OPERATING-HOURS.md`. Existing local accounts and data can be preserved with:
 
 ```sh
 npm run local:migrate

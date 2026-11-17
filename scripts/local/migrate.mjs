@@ -1,25 +1,25 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { config, startDatabase, sqlSync, root } from "./core.mjs";
+import { config, startDatabase, sqlSync, root, literal } from "./core.mjs";
 const c = config();
 startDatabase(c);
-if (
+for (const name of ["002_staff_workspace", "003_operating_hours"]) {
+  if (
+    sqlSync(
+      c,
+      `select exists(select 1 from local_auth.metadata where key=${literal("migration:" + name)});`,
+    ) === "t"
+  )
+    continue;
+  sqlSync(c, readFileSync(join(root, "supabase", name + ".sql"), "utf8"));
   sqlSync(
     c,
-    "select exists(select 1 from local_auth.metadata where key='migration:002_staff_workspace');",
-  ) === "t"
-) {
-  console.log("Staff workspace migration is already applied. No data changed.");
-  process.exit(0);
+    `insert into local_auth.metadata(key,value) values(${literal("migration:" + name)},'applied');`,
+  );
+  console.log(
+    "Applied " + name + " to the isolated local development database.",
+  );
 }
-sqlSync(
-  c,
-  readFileSync(join(root, "supabase/002_staff_workspace.sql"), "utf8"),
-);
-sqlSync(
-  c,
-  "insert into local_auth.metadata(key,value) values('migration:002_staff_workspace','applied');",
-);
 console.log(
-  "Applied additive staff read/archive functions to the isolated local database. Reservation rows were preserved.",
+  "Local migrations are current. Reservation rows and credentials were preserved.",
 );

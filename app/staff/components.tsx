@@ -1,4 +1,5 @@
 "use client";
+import { officialHours, launchDefaults } from "@/lib/operating-hours.mjs";
 import { useLanguage, LanguageSwitcher } from "@/lib/language";
 import { useEffect, useRef, useState } from "react";
 import type { z } from "zod";
@@ -554,7 +555,11 @@ export function Settings({
   save: (c: Config) => Promise<void>;
 }) {
   const { t, errorText } = useLanguage();
-  const [c, setC] = useState<Config>(data.config);
+  const [c, setC] = useState<Config>({
+    ...launchDefaults,
+    ...data.config,
+    operatingHours: data.config.operatingHours ?? officialHours,
+  });
   const [rooms, setRooms] = useState(JSON.stringify(c.rooms, null, 2));
   const [services, setServices] = useState(JSON.stringify(c.services, null, 2));
   const [closures, setClosures] = useState(JSON.stringify(c.closures, null, 2));
@@ -594,6 +599,220 @@ export function Settings({
           "New installations start closed. Enter verified inventory and service times before enabling bookings. Inventory changes are blocked while active reservations remain. Existing bookings retain their dining duration and minimum spend.",
         )}
       </p>
+      <section className="hours-settings">
+        <h3>{t("Operating hours · Malaysia time")}</h3>
+        <p className="field-note">
+          {t(
+            "Official defaults: Monday closed. Tuesday–Friday dinner 18:00–22:30. Saturday–Sunday lunch 12:00–14:30 and dinner 18:00–22:30.",
+          )}
+        </p>
+        {[1, 2, 3, 4, 5, 6, 0].map((day) => {
+          const current = c.operatingHours.find((h) => h.day === day)!;
+          return (
+            <div className="hours-setting-day" key={day}>
+              <strong>
+                {t(
+                  [
+                    "Sunday",
+                    "Monday",
+                    "Tuesday",
+                    "Wednesday",
+                    "Thursday",
+                    "Friday",
+                    "Saturday",
+                  ][day],
+                )}
+              </strong>
+              {day === 1 ? (
+                <span>{t("Closed")}</span>
+              ) : (
+                <div>
+                  {current.periods.map((period, index) => (
+                    <div className="hours-period" key={index}>
+                      <label>
+                        {t("Service starts")}
+                        <input
+                          type="time"
+                          required
+                          value={period.start}
+                          onChange={(e) =>
+                            setC({
+                              ...c,
+                              operatingHours: c.operatingHours.map((h) =>
+                                h.day === day
+                                  ? {
+                                      ...h,
+                                      periods: h.periods.map((p, i) =>
+                                        i === index
+                                          ? { ...p, start: e.target.value }
+                                          : p,
+                                      ),
+                                    }
+                                  : h,
+                              ),
+                            })
+                          }
+                        />
+                      </label>
+                      <label>
+                        {t("Service ends")}
+                        <input
+                          type="time"
+                          required
+                          value={period.end}
+                          onChange={(e) =>
+                            setC({
+                              ...c,
+                              operatingHours: c.operatingHours.map((h) =>
+                                h.day === day
+                                  ? {
+                                      ...h,
+                                      periods: h.periods.map((p, i) =>
+                                        i === index
+                                          ? { ...p, end: e.target.value }
+                                          : p,
+                                      ),
+                                    }
+                                  : h,
+                              ),
+                            })
+                          }
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="text-button"
+                        onClick={() =>
+                          setC({
+                            ...c,
+                            operatingHours: c.operatingHours.map((h) =>
+                              h.day === day
+                                ? {
+                                    ...h,
+                                    periods: h.periods.filter(
+                                      (_, i) => i !== index,
+                                    ),
+                                  }
+                                : h,
+                            ),
+                          })
+                        }
+                      >
+                        {t("Remove period")}
+                      </button>
+                    </div>
+                  ))}
+                  {current.periods.length < 4 && (
+                    <button
+                      type="button"
+                      className="text-button"
+                      onClick={() =>
+                        setC({
+                          ...c,
+                          operatingHours: c.operatingHours.map((h) =>
+                            h.day === day
+                              ? {
+                                  ...h,
+                                  periods: [
+                                    ...h.periods,
+                                    { start: "18:00", end: "22:30" },
+                                  ],
+                                }
+                              : h,
+                          ),
+                        })
+                      }
+                    >
+                      {t("Add service period")}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+        <button
+          type="button"
+          className="secondary"
+          onClick={() =>
+            setC({
+              ...c,
+              operatingHours: officialHours,
+              services: c.services.filter((s) => s.date !== undefined),
+            })
+          }
+        >
+          {t("Restore official weekly hours")}
+        </button>
+        <label className="arrival-interval">
+          {t("Booking arrival interval (minutes)")}
+          <input
+            type="number"
+            min={5}
+            max={120}
+            required
+            value={c.arrivalInterval}
+            onChange={(e) =>
+              setC({ ...c, arrivalInterval: Number(e.target.value) })
+            }
+          />
+        </label>
+        <p className="field-note">
+          {t(
+            "Arrivals start at service opening and follow this interval. The full area-specific dining duration must finish by service closing.",
+          )}
+        </p>
+      </section>
+      <section className="launch-settings">
+        <h3>{t("Public booking readiness")}</h3>
+        <p className="notice">
+          {t(
+            "Do not open public bookings until actual counter capacity, private-room inventory and booking policies have been confirmed. Existing reservations are preserved.",
+          )}
+        </p>
+        {(["capacitiesConfirmed", "policiesConfirmed"] as const).map((key) => (
+          <label className="checkbox" key={key}>
+            <input
+              type="checkbox"
+              checked={c[key]}
+              onChange={(e) =>
+                setC({
+                  ...c,
+                  [key]: e.target.checked,
+                  publicBookingsEnabled: e.target.checked
+                    ? c.publicBookingsEnabled
+                    : false,
+                })
+              }
+            />
+            <span>
+              {t(
+                key === "capacitiesConfirmed"
+                  ? "Actual seating capacities and room inventory are confirmed."
+                  : "Booking and privacy policies are approved.",
+              )}
+            </span>
+          </label>
+        ))}
+        <label className="checkbox">
+          <input
+            type="checkbox"
+            checked={c.publicBookingsEnabled}
+            disabled={!c.capacitiesConfirmed || !c.policiesConfirmed}
+            onChange={(e) =>
+              setC({ ...c, publicBookingsEnabled: e.target.checked })
+            }
+          />
+          <span>{t("Enable public bookings")}</span>
+        </label>
+        <p className="field-note">
+          {t(
+            c.publicBookingsEnabled
+              ? "Public booking launch switch is on."
+              : "Public bookings are closed.",
+          )}
+        </p>
+      </section>
       <div className="settings-grid">
         {(["counter", "private"] as const).map((a) => (
           <div key={a}>
@@ -690,14 +909,14 @@ export function Settings({
       <h3>{t("Available booking times")}</h3>
       <p className="field-note">
         {t(
-          "Each entry has area, times and either day (0 Sunday – 6 Saturday) or date (YYYY-MM-DD). A date-specific entry replaces weekly times for that area. Use an empty times array to close a date. Times are in MYT.",
+          "Optional start-time overrides by area: use day (0 Sunday to 6 Saturday) or date (YYYY-MM-DD). An empty array uses the weekly service windows and arrival interval. Overrides must still fit a complete dining interval within service hours; Monday stays closed.",
         )}
       </p>
       <p className="field-note">
         {t("Example structure:")}{" "}
         {t('{"day":2,"area":"counter","times":["18:00","20:00"]}')}
         {t(
-          ". List only approved start times; dining may continue for the configured duration after each start.",
+          ". A date-specific empty times array closes that date for the selected area. Existing reservations keep their original dining intervals.",
         )}
       </p>
       <textarea

@@ -1,3 +1,4 @@
+import { mondayClosed } from "../../lib/operating-hours.mjs";
 // Verifies this account without printing passwords, API keys, access or refresh tokens.
 import assert from "node:assert/strict";
 import { readFileSync, statSync } from "node:fs";
@@ -104,75 +105,104 @@ try {
     version: data.version,
   });
   assert.equal(settings.status, 200);
-  const day = new Intl.DateTimeFormat("en-CA", {
+  let day = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Kuala_Lumpur",
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
   }).format(new Date(Date.now() + 2 * 86400000));
+  if (mondayClosed(day))
+    day = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Kuala_Lumpur",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date(Date.now() + 3 * 86400000));
   const availability = await fetch(
     `${base}/api/availability?date=${day}&area=private&guests=2`,
   );
   assert.equal(availability.status, 200);
   const available = await availability.json();
-  assert.ok(available.slots.length);
-  const id = randomUUID();
-  const created = await fetch(`${base}/api/reservations`, {
-    method: "POST",
-    headers: { Origin: base, "Content-Type": "application/json" },
-    body: JSON.stringify({
-      id,
-      area: "private",
-      start: available.slots[0].start,
-      guests: 2,
-      name: "DEMO Authentication Check",
-      phone: "+12025550102",
-      email: "dev-check@example.invalid",
-      requests: "Synthetic local integration check.",
-      consent: true,
-      whatsapp: false,
-    }),
-  });
-  assert.equal(created.status, 201);
-  assert.equal(
-    (
-      await staff({
-        action: "status",
+  if (!data.config.publicBookingsEnabled) {
+    assert.equal(available.bookingOpen, false);
+    assert.deepEqual(available.slots, []);
+    const denied = await fetch(`${base}/api/reservations`, {
+      method: "POST",
+      headers: { Origin: base, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: randomUUID(),
+        area: "private",
+        start: `${day}T18:00:00+08:00`,
+        guests: 2,
+        name: "DEMO Closed Booking Check",
+        phone: "+12025550102",
+        email: "",
+        requests: "",
+        consent: true,
+        whatsapp: false,
+      }),
+    });
+    assert.equal(denied.status, 409);
+  } else {
+    assert.ok(available.slots.length);
+    const id = randomUUID();
+    const created = await fetch(`${base}/api/reservations`, {
+      method: "POST",
+      headers: { Origin: base, "Content-Type": "application/json" },
+      body: JSON.stringify({
         id,
-        expected: "pending",
-        status: "confirmed",
-      })
-    ).status,
-    200,
-  );
-  const after = await (await staff()).json();
-  const b = after.bookings.find((b) => b.id === id);
-  assert.equal(b.status, "confirmed");
-  const alternate = data.config.rooms.find((r) => r.id !== b.room);
-  assert.ok(alternate);
-  assert.equal(
-    (await staff({ action: "assign", id, room: alternate.id })).status,
-    200,
-  );
-  assert.equal(
-    (
-      await staff({
-        action: "status",
-        id,
-        expected: "confirmed",
-        status: "cancelled",
-      })
-    ).status,
-    200,
-  );
-  const audit = JSON.parse(
-    await sql(
-      c,
-      `select json_build_object('events',count(*),'actors',count(actor)) from aburii.audit where booking_id=${literal(id)}::uuid;`,
-    ),
-  );
-  assert.ok(audit.events >= 4);
-  assert.ok(audit.actors >= 3);
+        area: "private",
+        start: available.slots[0].start,
+        guests: 2,
+        name: "DEMO Authentication Check",
+        phone: "+12025550102",
+        email: "dev-check@example.invalid",
+        requests: "Synthetic local integration check.",
+        consent: true,
+        whatsapp: false,
+      }),
+    });
+    assert.equal(created.status, 201);
+    assert.equal(
+      (
+        await staff({
+          action: "status",
+          id,
+          expected: "pending",
+          status: "confirmed",
+        })
+      ).status,
+      200,
+    );
+    const after = await (await staff()).json();
+    const b = after.bookings.find((b) => b.id === id);
+    assert.equal(b.status, "confirmed");
+    const alternate = data.config.rooms.find((r) => r.id !== b.room);
+    assert.ok(alternate);
+    assert.equal(
+      (await staff({ action: "assign", id, room: alternate.id })).status,
+      200,
+    );
+    assert.equal(
+      (
+        await staff({
+          action: "status",
+          id,
+          expected: "confirmed",
+          status: "cancelled",
+        })
+      ).status,
+      200,
+    );
+    const audit = JSON.parse(
+      await sql(
+        c,
+        `select json_build_object('events',count(*),'actors',count(actor)) from aburii.audit where booking_id=${literal(id)}::uuid;`,
+      ),
+    );
+    assert.ok(audit.events >= 4);
+    assert.ok(audit.actors >= 3);
+  }
   const refresh = await staff({ action: "refresh" });
   assert.equal(refresh.status, 200);
   const oldCookie = cookie;
@@ -198,7 +228,7 @@ try {
   assert.equal(credentialOutput.status, 1);
   assert.ok(!credentialOutput.stdout.includes(credentials.password));
   console.log(
-    "PASS: private file permissions; unauthorized/wrong-password rejection; real Admin login; role check; synthetic-only data; API-key and origin protection; settings save; reservation creation/confirm/room assignment/cancel; database audit; refresh rotation; logout/revocation; no queued messages; production guard; noninteractive secret-output refusal.",
+    "PASS: private file permissions; unauthorized/wrong-password rejection; real Admin login; role check; synthetic-only data; API-key and origin protection; settings save; fail-closed public booking (or reservation actions/audit when explicitly enabled); refresh rotation; logout/revocation; no queued messages; production guard; noninteractive secret-output refusal.",
   );
 } catch {
   console.error(

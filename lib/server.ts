@@ -47,6 +47,9 @@ export async function supabase(
       "Booking not found",
       "Active commitment cannot be archived",
       "Invalid list filters",
+      "Invalid operating hours",
+      "Monday is closed",
+      "Confirm capacity and policies before enabling bookings",
     ];
     throw new ApiError(
       known.includes(data.message)

@@ -1,4 +1,5 @@
 "use client";
+import { mondayClosed, officialHours } from "@/lib/operating-hours.mjs";
 import { useLanguage } from "@/lib/language";
 import { useEffect, useRef, useState } from "react";
 type Area = "counter" | "private";
@@ -34,6 +35,19 @@ export default function Booking() {
   const [receipt, setReceipt] = useState<Receipt | null>(null);
   const [spend, setSpend] = useState(0);
   const [hold, setHold] = useState(0);
+  const [dateError, setDateError] = useState("");
+  const [bookingOpen, setBookingOpen] = useState<boolean | null>(null);
+  const [closed, setClosed] = useState(false);
+  const [hours, setHours] = useState(officialHours);
+  function chooseDate(value: string) {
+    if (mondayClosed(value)) {
+      setDate("");
+      setDateError("Monday is closed. Please choose another date.");
+      return;
+    }
+    setDateError("");
+    setDate(value);
+  }
   const key = useRef<{ payload: string; id: string } | null>(null);
   const today = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Kuala_Lumpur",
@@ -61,6 +75,9 @@ export default function Booking() {
         if (!r.ok) throw Error(d.error);
         if (controller.signal.aborted) return;
         setSlots(d.slots);
+        setBookingOpen(d.bookingOpen === true);
+        setClosed(d.closed ?? false);
+        if (d.operatingHours) setHours(d.operatingHours);
         setSpend(Number(d.minimumSpend));
         setHold(d.holdMinutes);
       })
@@ -76,7 +93,7 @@ export default function Booking() {
   async function submit(e: React.SubmitEvent<HTMLFormElement>) {
     e.preventDefault();
     setError("");
-    if (!start) return;
+    if (!date || mondayClosed(date) || !start || bookingOpen === false) return;
     setBusy(true);
     const fd = new FormData(e.currentTarget);
     const payload = {
@@ -201,6 +218,36 @@ export default function Booking() {
           炙
         </span>
       </div>
+      <details className="booking-hours">
+        <summary>{t("Operating hours · Malaysia time")}</summary>
+        <dl>
+          {[1, 2, 3, 4, 5, 6, 0].map((day) => (
+            <div key={day}>
+              <dt>
+                {t(
+                  [
+                    "Sunday",
+                    "Monday",
+                    "Tuesday",
+                    "Wednesday",
+                    "Thursday",
+                    "Friday",
+                    "Saturday",
+                  ][day],
+                )}
+              </dt>
+              <dd>
+                {hours.find((h) => h.day === day)?.periods.length
+                  ? hours
+                      .find((h) => h.day === day)!
+                      .periods.map((p) => `${p.start}–${p.end}`)
+                      .join(" · ")
+                  : t("Closed")}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </details>
       <fieldset disabled={busy}>
         <legend>
           <span className="step">01</span>
@@ -269,8 +316,8 @@ export default function Booking() {
               required
               min={today}
               value={date}
-              onInput={(e) => setDate(e.currentTarget.value)}
-              onChange={(e) => setDate(e.target.value)}
+              onInput={(e) => chooseDate(e.currentTarget.value)}
+              onChange={(e) => chooseDate(e.target.value)}
             />
           </label>
           <label>
@@ -285,6 +332,14 @@ export default function Booking() {
             />
           </label>
         </div>
+        {dateError && (
+          <p className="error" role="alert">
+            {t(dateError)}
+          </p>
+        )}
+        <p className="field-note">
+          {t("Monday closed · all times are Malaysia time (UTC+8).")}
+        </p>
         <div className="time-label">
           {t("Available times ")}
           <span>{t("Malaysia time (UTC+8)")}</span>
@@ -296,6 +351,18 @@ export default function Booking() {
             <p className="notice">
               {errorText(availabilityError)}{" "}
               <a href="tel:+60109100267">{t("Call our team ↗")}</a>
+            </p>
+          ) : date && closed ? (
+            <p className="notice">
+              {t(
+                "The restaurant is closed on this date. Please choose another date.",
+              )}
+            </p>
+          ) : date && bookingOpen === false ? (
+            <p className="notice">
+              {t(
+                "Online bookings will open after seating capacities and policies are confirmed. Please contact Aburii for assistance.",
+              )}
             </p>
           ) : !date ? (
             <p className="time-empty">

@@ -1842,3 +1842,87 @@ html[lang="zh-CN"] .eyebrow {
     gap: 9px;
   }
 }
+
+.hours-settings,
+.launch-settings {
+  padding: 20px 0;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 24px;
+}
+.hours-setting-day {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  align-items: start;
+  gap: 20px;
+  padding: 15px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+}
+.hours-setting-day > strong {
+  padding-top: 10px;
+  font-weight: 500;
+}
+.hours-setting-day > span {
+  padding-top: 10px;
+  color: var(--muted);
+}
+.hours-period {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 15px;
+}
+.hours-period label {
+  min-width: 100px;
+}
+.hours-period input {
+  margin-bottom: 6px !important;
+}
+.arrival-interval {
+  max-width: 300px;
+  margin-top: 22px;
+}
+.booking-hours {
+  margin-bottom: 20px;
+  border-top: 1px solid var(--line);
+  padding-top: 15px;
+}
+.booking-hours summary {
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+  line-height: 1.8;
+}
+.booking-hours dl {
+  display: block;
+  border: 0;
+  padding: 12px 0 0;
+  margin: 0;
+  font-size: 10px;
+}
+.booking-hours dl > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 15px;
+  padding: 6px 0;
+}
+.booking-hours dd {
+  text-align: right;
+  line-height: 1.7;
+}
+@media (max-width: 650px) {
+  .hours-setting-day {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .hours-period {
+    gap: 10px;
+  }
+  .hours-period label {
+    flex: 1;
+    min-width: 90px;
+  }
+  .booking-hours dl > div {
+    align-items: start;
+  }
+}
