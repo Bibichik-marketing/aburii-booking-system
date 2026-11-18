@@ -2,7 +2,7 @@
 
 ## Latest inspection
 
-See `PRODUCTION-MIGRATION-REVIEW.md` for the 2026-11-17 authenticated read-only Production catalog/Auth review and exact approval plan. Keys are now privately configured; the application schema is fresh and compatible. Public signup/default Auth origin/SMTP setup, recovery readiness and staff onboarding settings still need review. The publishable-key REST 401 has been resolved as expected OpenAPI endpoint protection; normal Data API authorization passes. See `PRODUCTION-BACKUP-RECOVERY.md` and `PRODUCTION-AUTH-CHANGE-PLAN.md` for the remaining gates. No Production migrations were executed. The original preparation notes below describe the state before that inspection.
+See `PRODUCTION-MIGRATION-REVIEW.md` for the 2026-11-17 authenticated read-only Production catalog/Auth review and exact approval plan. Keys are now privately configured; the application schema is fresh and compatible. Public signup/default Auth origin/SMTP setup, actual archive recovery and local 001→002→003 rehearsal now pass; staff onboarding settings still need review. Migration preflight is GO for explicit owner approval, with no Production migrations executed. The publishable-key REST 401 has been resolved as expected OpenAPI endpoint protection; normal Data API authorization passes. See `PRODUCTION-BACKUP-RECOVERY.md` and `PRODUCTION-AUTH-CHANGE-PLAN.md` for the remaining gates. No Production migrations were executed. The original preparation notes below describe the state before that inspection.
 
 ## Confirmed project and current state
 

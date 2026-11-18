@@ -1,105 +1,71 @@
 # Aburii Production migration approval plan
 
-Project: `oemwlqisfwrhfxsvuszi` only. Review date: 2026-11-17, Asia/Kuala_Lumpur.
+Project: **oemwlqisfwrhfxsvuszi** only. Review date: 2026-11-17, Asia/Kuala_Lumpur.
 
-**Database/source compatibility: PASS. Production Auth/launch readiness: FAIL. Execution: NOT APPROVED / NOT RUN.** The authenticated dashboard and catalog inspection now confirm a fresh application schema and required PostgreSQL/Auth prerequisites. Only metadata SELECTs inside a READ ONLY transaction were executed remotely; no Production migrations, schema/data writes or Auth configuration changes were performed. The remaining Auth/API and recovery-plan issues below must be reviewed before final approval; they must not be mistaken for a capacity-rule failure.
+**Decision: GO for explicit migration-only approval. Production execution: NOT APPROVED / NOT RUN.** Database compatibility, actual archive recovery and the local migration rehearsal passed. Production Auth/onboarding/launch is a separate gate and remains unconfigured. No Production schema/data/Auth settings were changed, no invitations sent, no bookings created and nothing deployed.
 
-## Read-only observations
+## Verified findings
 
-| Check | Result | Evidence / limitation |
+| Check | Result | Evidence |
 | --- | --- | --- |
-| Exact target and saved key format | PASS | Server configuration pins the owner-confirmed HTTPS origin and project reference; keys are not printed |
-| Secret-key REST metadata | PASS | HTTP 200; only `/` and `/rpc/rls_auto_enable` are advertised; no table definitions and no Aburii RPC paths |
-| Private schema exposure | PASS for API exposure only | `Accept-Profile: aburii` returns HTTP 406 / `PGRST106`; this proves it is not an allowed Data API profile, not that the schema does not exist |
-| Public Auth settings | PASS for reachability | HTTP 200; email enabled, mail auto-confirm false, phone auto-confirm false, anonymous users disabled |
-| Staff-only signup configuration | FAIL | `disable_signup=false`: public signup is currently enabled. Do not change it as part of this read-only review; disable through separately authorized Auth configuration before staff onboarding/production use |
-| Publishable key / Data API | PASS — 401 diagnosed | The root OpenAPI endpoint returns 401 "Secret API key required" by design. A normal GET to a known nonexistent public table with limit=0 returns 404/PGRST205 for the saved key; a deliberately invalid-key control returns 401. Headers use apikey only. No RLS/key rotation/private-schema changes are needed. Staff JWT/role flows still require later authorized account testing |
-| Full catalog / initial schema | PASS | Authenticated Aburii dashboard plus catalog query: PostgreSQL 17.12, read_only=on, executor postgres, schema CREATE and Auth REFERENCES privileges true; auth.users/auth.uid()/UUID generator exist; expected API roles exist; zero application tables, no aburii schema, no Aburii-prefix functions, no migration-history table |
-| Platform defaults/event triggers | PASS for reviewed behavior | Seven platform event triggers inspected by catalog. Existing public.rls_auto_enable() definition inspected: it applies only to public, not aburii. Public default ACLs are schema-scoped; explicit migration grants/revocations remain required and were tested locally |
-| Auth origin and redirects | FAIL for onboarding/launch | Site URL is http://localhost:3000; redirect allowlist is empty. Approved HTTPS origin is still needed |
-| Auth email delivery/templates | FAIL for onboarding | No custom SMTP; dashboard says default templates are used and custom SMTP is required to edit them. Required /staff/password TokenHash invite/recovery templates are not configured |
-| Password-related settings | REVIEW REQUIRED | Secure email change enabled; secure password change and current-password-on-update disabled. Minimum password value was UI-redacted and was not extracted. Application setup enforces at least 12 characters; hosted policy and session/MFA requirements need separate approval |
-| Recovery protection | Export PASS; actual archive restore BLOCKED | Full Production archive, password-free roles, listing/payload/hash/private-permission checks passed through verified Session pooler TLS. The native local environment lacks supabase_vault and a container runtime. A compatible isolated restore target must be selected before full recovery validation. See PRODUCTION-BACKUP-RECOVERY.md |
+| Project isolation | PASS | Server and backup connections are pinned to the owner-confirmed Aburii project; no other project was connected |
+| Fresh application schema | PASS | Authenticated catalog inspection: PostgreSQL 17.12, required Auth objects/UUID generator/API roles, schema CREATE and Auth REFERENCES rights; no application tables, aburii schema, Aburii-prefix functions or migration-history table |
+| API authorization | PASS | Saved publishable key reaches a normal read-only table endpoint (404/PGRST205 for the deliberately nonexistent table); invalid-key control receives 401. Root OpenAPI metadata intentionally requires the secret key. No key rotation/RLS changes needed |
+| Private API exposure | PASS | The aburii profile is rejected with 406/PGRST106; no private tables exposed |
+| Platform compatibility | PASS | Existing defaults and event triggers reviewed. Platform RLS auto-enable applies to public only. Supabase 17.12/supautils privilege behavior was reproduced in the isolated clone |
+| Native Production backup | PASS | Full custom archive and password-free role export; listing, entire payload readability, SHA-256 and private file permissions verified; retained on this Mac outside the Production server |
+| Actual Production archive recovery | PASS | All 40 archived tables and data hashes, sequences, constraints/indexes, non-extension function definitions/owners, RLS/policies, event triggers, extension versions and effective API-role permissions matched. No archive object/data section omitted or stubbed |
+| Source preservation | PASS | Production fingerprints matched before/after full restoration and after local rehearsal; source access used read-only transactions |
+| Exact migration rehearsal | PASS | Checksum-verified 001→002→003 ran only on the restored local clone as postgres; both read-only verification files passed |
+| Closed public booking | PASS | Rehearsal ended with publicBookingsEnabled=false, capacitiesConfirmed=false, policiesConfirmed=false, counterEnabled=false and privateEnabled=false; no staff, bookings or outbox rows seeded |
+| Runtime cleanup | PASS | Isolated network-disabled database container removed; dedicated Colima VM stopped; no host folder mounts, application port forwarding, active-context switch, Auth/email/delivery workers or automatic startup service |
 
-No customer/staff rows, passwords, JWTs or secret keys were displayed. Remote inspection used GET metadata requests, authenticated dashboard reads and catalog-only SQL in BEGIN READ ONLY / ROLLBACK. No migration file was loaded into the remote editor. Only the confirmed Aburii project was inspected; its organization/account display name is shared branding, not evidence of a BiBiChik database connection. No other project was opened.
+Private evidence is in `.backups/production-2026-11-17T09-40-57-358Z/`: `manifest.json`, native archive, password-free roles, source/restored checkpoint fingerprints and `docker-recovery-report.json`. None are tracked by Git. See `PRODUCTION-BACKUP-RECOVERY.md` for the reproducible restore procedure and platform backup limits. No off-Mac upload was authorized/performed; an additional encrypted retention copy is recommended before collecting real customer data.
 
-## Immutable migration order
+## Immutable migration sequence and data-loss review
 
-Checksums are in `supabase/migration-plan.json`; keep all three original files unchanged.
+The original files and SHA-256 hashes remain unchanged in `supabase/migration-plan.json`.
 
-| Order | Exact file | Effect | Preconditions / risk |
-| --- | --- | --- | --- |
-| 1 | `supabase/001_aburii.sql` | Creates private Aburii schema, six tables, constraints, indexes, RLS and RPC-only access; settings start with both areas disabled, zero counter capacity, no rooms/services | Fresh installation only. Stops on an existing schema/function; never drop objects to force it through |
-| 2 | `supabase/002_staff_workspace.sql` | Staff context/list/detail/Today/archive functions plus indexes; archives stored as audit events | Requires 001. `CREATE OR REPLACE` means unexpected pre-existing Aburii functions must first be investigated |
-| 3 | `supabase/003_operating_hours.sql` | Official service windows, duration-aware arrivals, configurable interval and fail-closed public gate; original Admin validator becomes private | Requires 001 and 002. First application resets weekly service defaults, removes obsolete weekly starts, retains date overrides/inventory/bookings, and sets all three launch flags false. Reapplication preserves later Admin configuration; do not assume it will close a previously enabled installation |
+1. **001_aburii.sql** creates the private schema and six tables, constraints/indexes, RLS, staff role membership, capacity locks, expiry, audit, outbox and explicit RPC grants. Fresh installation only; do not rerun it over existing objects. Initial capacities are zero, inventory/services empty and both areas disabled. No accounts or customer data are seeded.
+2. **002_staff_workspace.sql** adds staff context/list/detail/Today/archive RPCs and indexes. Reservation rows/status/capacity functions are preserved. Archive is audit-backed. Its CREATE OR REPLACE statements must not overwrite an unexpected existing installation.
+3. **003_operating_hours.sql** initializes official weekly MYT windows and the fail-closed public-launch gate, replaces slot generation and wraps the original Admin validator privately. First application resets weekly service settings/removes obsolete weekly starts but retains date-specific overrides, inventory and reservations. It appends a migration audit event and sets all three public-launch flags false. Reapplying it does not reset later Admin settings.
 
-No migration drops/truncates tables, deletes reservations or copies development/customer data. Migration 003 deliberately changes settings and appends an audit event, and moves/replaces functions. This is safe only after confirming the initial schema state. Do not assume a remote transaction can be rolled back after it has committed.
+No migration drops/truncates tables or deletes reservations. No development schemas, credentials, sessions or demo data may be copied into Production. No existing Aburii objects were found; if the target changes before execution, stop and reconcile rather than dropping objects or blindly skipping files. Each migration is transactional; the three-file sequence is not one atomic transaction. A committed step is not undone by a later failure.
 
-## Requirement coverage
+## Reservation and security requirement coverage
 
-| Requirement | Implementation | Local result |
-| --- | --- | --- |
-| Reservation records, consent, customer contacts, optional fields and references | 001 bookings constraints, `aburii_book`, original intervals, policy/consent snapshot and request-ID idempotency | PASS |
-| Counter Seating capacity | Settings guest capacity; peak occupancy over overlapping half-open intervals; serialized settings-row lock | PASS, including concurrent last-seat requests |
-| Private Room capacity and room assignment | Internal compatible room allocation and overlap validation; one/multiple configurable rooms; assignment before start only | PASS, including parallel requests and post-start retained room commitments |
-| Independent availability | Each request evaluates only its own counter/private inventory; customer selects area category only | PASS |
-| Capacity lifecycle | Pre-start cancellation/rejection/expiry release; post-start completion/cancellation/no-show preserves original commitment to original end | PASS |
-| Pending expiry and confirmation | Logical expiry for reads/availability plus locked materialization on mutation; expired holds cannot be confirmed | PASS |
-| Admin Settings | Admin-only configure, optimistic version, validated inventory/durations/intervals/notice/horizon/closures/minimum spend; prevents invalidating existing allocations | PASS |
-| Staff roles | Auth UUID foreign key, active membership and `admin`/`manager`/`staff`; role checked per RPC; no automatic accounts or invitations | PASS |
-| RLS and permissions | RLS enabled on settings/staff/bookings/audit/outbox/rates; no table access granted to API roles; explicit service vs authenticated RPC grants; pinned function search paths | PASS locally; Production catalogs pending |
-| Dashboard/Today/Pending Approval/archive | 002 all-date search/filter/sort/pagination and effective status; Pending Approval reuses these APIs without new schema/status | PASS |
-| Official hours and timezone | 003 Monday closed; Tue–Fri 18:00–22:30; weekends 12:00–14:30 and 18:00–22:30, Asia/Kuala_Lumpur; full duration must fit a single period | PASS |
-| Notifications and audit | Transactional outbox, opted-in updates, leases/retries/superseded-state protection; no worker is started during migration | PASS |
-| Public booking gate | 003 initializes `publicBookingsEnabled=false`, `capacitiesConfirmed=false`, `policiesConfirmed=false`; slots empty and new booking rejected until explicit Admin approval | PASS |
+- Counter Seating uses peak overlapping guest occupancy; Private Room uses internally selected compatible rooms and overlap checks. Their inventories are independent. Customers select only the category.
+- Settings-row transactional locking serializes booking/status/assignment/configuration mutations. Explicit RPC-only grants protect that boundary; trusted administrators must not insert reservations directly.
+- Pre-start cancellation/rejection/expiry releases future capacity; post-start completion/cancellation/no-show retains the original commitment through the original end. Logical expiry excludes invalid pending holds even without a scheduler.
+- Admin-only settings use optimistic versions and validate capacities, inventory, durations, arrival interval, limits, notice/horizon, closures and minimum spend. Existing allocations cannot be invalidated by inventory edits.
+- Staff uses Supabase Auth UUIDs plus active admin/manager/staff membership, checked on every staff RPC. Editable Auth user metadata cannot grant roles.
+- RLS is enabled on settings/staff/bookings/audit/outbox/rates, with no direct API-role table privileges. Service-only and authenticated-only RPC grants and pinned function search paths passed the complete grant matrix checks.
+- Official hours: Monday closed; Tue–Fri dinner 18:00–22:30; Sat/Sun lunch 12:00–14:30 and dinner 18:00–22:30, Asia/Kuala_Lumpur. The full configurable duration must fit one service period. Durations/arrival intervals remain configurable.
+- Notifications remain transactional and opt-in; no worker starts during migration. Dashboard, Today, Pending Approval, archive, permissions and audit workflows retain existing APIs/statuses.
 
-Capacity protection relies on the RPC-only privilege boundary and transactional locks, not a room exclusion constraint. Trusted SQL administrators must not insert/alter reservations outside these RPCs. The private schema must never be added to exposed API schemas. Do not alter unrelated Supabase system roles, functions or event triggers.
+The existing 89-test SQL/security/capacity suite had already passed and was not rerun during this final recovery task. The actual-archive recovery and rehearsal are new integration checks against the matched Supabase runtime, not a repeat of that suite.
 
-## Remaining approval gates
+## Exact Production execution plan — requires final approval
 
-The verified schema is suitable for the fresh 001→002→003 sequence. Public signup/default Auth origin/SMTP/password policy and staff account end-to-end testing are onboarding/API/launch blockers; they do not require changing the migration files. The 401 is resolved as expected protection on OpenAPI metadata. A verified Production backup and actual archive recovery evidence are still required before final execution approval; see `PRODUCTION-BACKUP-RECOVERY.md`. No keys should be pasted into chat. API Auth-settings HTTP 200 alone was not sufficient to verify publishable-key Data API access.
+1. Reconfirm project reference **oemwlqisfwrhfxsvuszi**, retained private checkpoint/checksums and that the source remains at the reviewed fresh-schema state. If Production has changed, take/retest the appropriate new checkpoint before proceeding.
+2. Run `supabase/inspect_production.sql` only in the verified Aburii trusted SQL session. It uses BEGIN READ ONLY … ROLLBACK and returns catalog metadata, not customer/staff records or credentials. Stop on any new schema/function conflict or unexpected privilege/platform difference.
+3. After explicit approval, execute the exact contents of `supabase/001_aburii.sql` in that project's trusted SQL editor. Require success before continuing. Do not run local setup or seed scripts remotely.
+4. Execute `supabase/002_staff_workspace.sql`, require success, then execute `supabase/003_operating_hours.sql`, require success. If a step fails, stop, inspect rollback/committed state and revise the plan. Never restart at 001 blindly or drop the schema as an automatic recovery.
+5. Immediately execute the read-only checks below. Keep all launch flags/areas disabled. Do not provision users, send mail, run notification/expiry workers, connect the local preview to Production or deploy anything.
 
-The dashboard displays an active Supabase technical-issue banner. Its relevance to this project was not established; recheck service health before any authorized execution. The 401 was subsequently confirmed as deliberate OpenAPI endpoint protection, not an outage or bad key. See the Supabase changelog link below.
+No database URL/password, CLI link, management token or API secret is embedded in this plan. No Production restore command is automated. Any actual recovery is separately approved and must review the chosen checkpoint and changes since it.
 
-## Exact execution plan — only after final approval
+## Exact post-migration checks
 
-1. Reconfirm project reference oemwlqisfwrhfxsvuszi in the trusted dashboard at execution time. Owner sign-in and catalog inspection are complete. Review the remaining API/Auth findings, approve a recovery approach, and obtain explicit migration-only approval. No Auth settings changes are included in that approval unless separately authorized.
-2. Run only `supabase/inspect_production.sql` in the Aburii project's trusted SQL session. It wraps catalog SELECTs in `BEGIN READ ONLY … ROLLBACK` with timeouts. Review server version, `auth.users`, `auth.uid()`, UUID generator, expected roles, existing schemas/tables, all Aburii-prefix functions, event triggers, default ACLs and policies. It selects no user records or secret values. Inspect migration-history details if its table exists; do not infer that hand-run SQL files appear in Supabase CLI migration history.
-3. Fresh-install acceptance criteria: no existing `aburii` schema, no `public.aburii_*` functions/overloads or other conflicting objects; required Auth objects/roles exist; trusted execution role can create the schema/functions and issue grants; default privileges/event triggers do not undermine explicit revocations; backup/recovery approach is reviewed. Existing unrelated application tables or migration history require explicit reconciliation. If anything differs, STOP and revise the plan; do not overwrite/drop or automatically skip files.
-4. After explicit approval, open **the same verified Aburii project** SQL editor and execute the exact contents of `001_aburii.sql`. Require transaction success before continuing. It creates no staff/reservations and exposes no live booking slots. Do not run local setup/seed scripts remotely.
-5. Execute the exact contents of `002_staff_workspace.sql`; require transaction success. Then execute the exact contents of `003_operating_hours.sql`; require transaction success. Each file has its own BEGIN/COMMIT. There is no single cross-file transaction. If a step fails, stop and inspect that step's rollback/committed state; never restart at 001 blindly.
-6. Immediately run the read-only post-migration checks below. Record migration checksums, executor and results privately. Do not invite users, start a worker, connect the local preview to Production, enable capacities/launch flags or deploy anything.
+1. `supabase/verify_production.sql`: settings singleton, three false launch flags, official hours/version, RLS on all six tables, private schema/table access denial and representative RPC grants. Read-only transaction rolls back.
+2. `supabase/verify_production_full.sql`: fresh-install empty staff/bookings/outbox/rates, disabled areas/zero counter/no rooms, exactly 15 public Aburii RPCs with complete anon/authenticated/service_role grant matrix, no API-role execution of internal functions and pinned paths. Read-only transaction rolls back. Run before application traffic/provisioning.
+3. Read-only REST metadata: intended public Aburii RPCs alongside existing platform functions; no private table exposure; aburii profile remains rejected. A publishable-key 401 on the OpenAPI root is expected, not a failure. Preserve existing platform functions/triggers.
+4. Only read-only availability checks: both areas report bookingOpen=false/zero slots, and Monday has no slots. Do not call book/status/configure/expiry/notification RPCs as a read test; they may write.
 
-No database URL/password, CLI link, management token, API secret or destructive reset command is embedded in this plan. Do not use an inherited CLI linked target or a parent repository environment.
+## Separate onboarding and launch requirements — no changes authorized here
 
-## Exact post-migration verification
+Last Auth inspection showed public signup enabled, Site URL http://localhost:3000, an empty redirect allowlist and default email templates without custom SMTP. Before onboarding/launch, approve the changes in `PRODUCTION-AUTH-CHANGE-PLAN.md`: disable public signup while retaining Email and trusted Admin invitations, keep anonymous sign-ins off/email confirmation on, set the actual approved HTTPS origin/exact callbacks, configure approved SMTP/sender/templates and review hosted password/session/MFA requirements. Do not send invitations during this migration task.
 
-Execute these local files as SQL only after an approved migration in the confirmed project:
+Actual seating capacities, final policy approval, staff account end-to-end tests, WhatsApp delivery and public launch remain separate approvals. Migration approval never enables public bookings or authorizes GoDaddy deployment.
 
-1. `supabase/verify_production.sql` — checks one settings record, all three launch flags false, official hours/version, all six tables with RLS, private schema/table access denial, and representative service/authenticated RPC grants. Read-only transaction ends in ROLLBACK.
-2. `supabase/verify_production_full.sql` — fresh-install checks for no seeded staff/bookings/outbox/rates, disabled areas/zero counter/no rooms, all 15 public Aburii RPCs with the exact anon/authenticated/service grant matrix, no API-role execution of internal functions, and pinned search paths. Read-only transaction ends in ROLLBACK. Run before provisioning accounts or any application traffic, because it intentionally expects an empty installation.
-3. Re-run read-only REST metadata inspection: only the intended Aburii public RPCs should be added alongside existing platform functions; no Aburii tables exposed, and the `aburii` profile remains rejected. Preserve the baseline `rls_auto_enable` platform function.
-4. Using only SELECT/read-only availability checks after approval, confirm both areas report `bookingOpen=false` and zero slots for an otherwise open date, and Monday has no slots. Do not invoke book/status/configure/expiry/notification RPCs as a "read test"; some write even when their names sound administrative.
-5. Confirm Admin Settings/Staff authorization and full Supabase Auth login/refresh/logout/invite/recovery later under separately approved staff provisioning. Do not create a test user or invite someone during this review. Keep all launch flags false until real capacities, policies and end-to-end tests are explicitly approved.
-
-## Local validation performed
-
-`npm test` passes **89/89** tests in a disposable PostgreSQL cluster with TCP disabled. The runner now also executes `inspect_production.sql` before the sequence and both verification files after 003, before fixtures. No configured Supabase URL is used by those database tests. The original three migration checksums remain unchanged.
-
-Local SQL tests do not prove the Production database has no private objects, has the same event triggers/default ACLs/Postgres version, or has secure Auth dashboard settings. Production catalog observations are now recorded above. Final live Auth/API behavior, backup/recovery approval and all launch readiness checks remain distinct from the passing schema compatibility review.
-
-References: Supabase [API security](https://supabase.com/docs/guides/api/securing-your-api), [custom schema exposure](https://supabase.com/docs/guides/api/using-custom-schemas), and [read-only Management API query](https://supabase.com/docs/reference/api/v1-read-only-query). Project API keys do not replace trusted dashboard access or an appropriately scoped Management API token for catalog inspection.
-
-## Remaining preflight completion update
-
-API authorization is PASS, with the OpenAPI root restriction explained by Supabase's [documented change](https://supabase.com/changelog/42949-breaking-change-removing-access-to-openapi-spec-via-the-anon-key). The earlier inference that this 401 implied a publishable-key problem was incorrect.
-
-A new isolated recovery drill passed against existing synthetic local data, including effective table/function permissions and RLS. It did not create a Production backup. The database password is now configured privately, and the downloaded CA is installed with verify-full, but direct endpoint DNS is blocked by this environment's IPv6 lookup limitation. A verified Session pooler host is needed before a full read-only Production export can run; the real archive then needs an isolated compatible restore check. **Current migration decision: NO-GO until that backup/recovery gate passes, followed by explicit migration approval.**
-
-Auth changes and the still-undecided HTTPS origin/redirect/SMTP setup are prepared in `PRODUCTION-AUTH-CHANGE-PLAN.md`; no remote Auth changes were made. The original three migration hashes and their proven fail-closed launch behavior remain unchanged. The passed 89-test suite was not rerun during this remaining preflight.
-
-## Production export completion update
-
-The password authenticated successfully through the supplied Session pooler. The Supabase CA and verify-full are in use. The real Production dump and password-free role export were created; full payload readability, checksums and private permissions passed. Startup PGOPTIONS are ignored by this pooler, so the exporter's metadata check now explicitly starts a read-only transaction; pg_dump itself uses a read-only snapshot. No remote configuration was changed.
-
-The remaining recovery blocker is a compatible isolated restore environment: this archive includes supabase_vault, which is absent locally, and no container runtime is installed. User preference for a local Docker/Supabase recovery environment versus a separately approved recovery project is pending. The full actual archive has not been restored, so the migration decision remains **NO-GO**, not a conditional or inferred recovery PASS. The previously passed migration suite was not repeated.
+References: Supabase [OpenAPI endpoint restriction](https://supabase.com/changelog/42949-breaking-change-removing-access-to-openapi-spec-via-the-anon-key), [API security](https://supabase.com/docs/guides/api/securing-your-api), [backup/restore](https://supabase.com/docs/guides/platform/migrating-within-supabase/backup-restore), [supautils privilege behavior](https://github.com/supabase/supautils).
