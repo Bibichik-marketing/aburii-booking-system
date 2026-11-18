@@ -2,7 +2,9 @@
 
 Project: **oemwlqisfwrhfxsvuszi** only. Review date: 2026-11-17, Asia/Kuala_Lumpur.
 
-**Decision: GO for explicit migration-only approval. Production execution: NOT APPROVED / NOT RUN.** Database compatibility, actual archive recovery and the local migration rehearsal passed. Production Auth/onboarding/launch is a separate gate and remains unconfigured. No Production schema/data/Auth settings were changed, no invitations sent, no bookings created and nothing deployed.
+**Execution update (2026-11-18): owner approved; 001→002→003 are committed once and both required verification scripts passed. A supplementary read-only summary query failed with SQLSTATE 42601; execution stopped without retry. Do not rerun migrations. See PRODUCTION-MIGRATION-RESULT.md.**
+
+The reviewed plan below records the pre-execution decision: GO for explicit migration-only approval. Database compatibility, actual archive recovery and the local migration rehearsal passed. Production Auth/onboarding/launch is a separate gate and remains unconfigured. No Production schema/data/Auth settings were changed, no invitations sent, no bookings created and nothing deployed.
 
 ## Verified findings
 

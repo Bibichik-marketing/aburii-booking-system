@@ -1,3 +1,7 @@
+## Production execution status — 2026-11-18
+
+The owner-approved 001→002→003 sequence has now been committed once in the pinned Aburii project. Both required verification scripts passed. The executor stopped on an additional read-only summary syntax error (42601), without retry. See `PRODUCTION-MIGRATION-RESULT.md` for exact results. Do not execute the fresh-install sequence again. Auth/onboarding/deployment were not changed.
+
 # Aburii Production Supabase preparation
 
 ## Latest inspection
