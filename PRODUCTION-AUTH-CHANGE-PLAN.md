@@ -2,6 +2,21 @@
 
 Target project: `oemwlqisfwrhfxsvuszi`. This plan is for separate approval; no remote settings or users were changed.
 
+## Next-stage readiness and information needed
+
+Database migration stage is COMPLETE. A read-only Auth-settings review on 2026-11-18 confirmed public signup is currently enabled, Email is enabled, email confirmation is required and anonymous sign-ins are disabled. No Auth settings were changed. The last dashboard inspection showed the default http://localhost:3000 Site URL, no redirect allowlist and default email templates; full dashboard settings should be reconfirmed before any approved change.
+
+Collect these items one at a time:
+
+1. **Owner-approved HTTPS application origin and where it will actually be served.** This must host the existing /staff and /staff/password pages; the local preview still uses its isolated development adapter. No hostname or GoDaddy deployment is assumed. Ask for this first; if undecided, record it as pending rather than sending links to a default localhost URL.
+2. **The owner's first Admin email address**, controlled by the intended administrator. No password, existing key or OTP should be pasted into chat.
+3. **Approved SMTP provider and sender identity**, with credentials entered only through a private approved channel; domain/sender verification and the custom invite/recovery templates below must be ready before sending mail.
+4. **Explicit approval for a concrete settings/onboarding action**: disable public signup while keeping Email/confirmation enabled and anonymous sign-ins disabled, set the agreed origin/exact redirects and templates, then invite only the approved address and assign its Aburii Auth UUID the admin role. No account/invitation/settings action is authorized by this preparation request.
+
+Before actual Production app login, privately configure its server environment, including a fresh rate-limit secret and the approved HTTPS origin. Do not point the existing synthetic local launcher at Production. Production login must use Supabase Auth, never the development account/credentials.
+
+After approval, the administrator will receive a one-time invitation, active membership will be assigned before link submission, and the administrator will choose their own unique password (at least 12 characters) on /staff/password. Do not share that password with the agent. Password recovery uses the approved recovery template and Supabase verification. End-to-end signup denial, membership checks, refresh/logout, invite and recovery tests require approved users/recipients; none have been executed or sent here.
+
 ## Staff-only access
 
 In Authentication → Sign In / Providers:

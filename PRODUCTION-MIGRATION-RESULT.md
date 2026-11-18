@@ -2,9 +2,9 @@
 
 Project: `oemwlqisfwrhfxsvuszi` only. Owner explicitly approved execution.
 
-**Approved migrations: PASS / all committed exactly once. Required verification scripts: PASS. Overall executor status: FAILED_STOPPED on an additional read-only summary query.**
+**Database migration stage: COMPLETE / PASS.** All three approved migrations committed exactly once, both required verification scripts previously passed, and the separately approved corrected supplementary read-only check now passes. The original executor FAILED_STOPPED record is preserved as historical evidence; its migration guard remains in place.
 
-No migration may be automatically rerun. The private one-shot execution ledger is retained and blocks accidental repetition. No retry or further remote query was executed after the error.
+No migration may be automatically rerun. The private one-shot execution ledger is retained and blocks accidental repetition. No automatic retry occurred. After the owner explicitly approved a separate read-only follow-up, only that corrected check was executed; no migration or prepared verification script was rerun.
 
 ## Exact results
 
@@ -31,3 +31,11 @@ The local execution record retains FAILED_STOPPED rather than hiding the error. 
 ## Preserved boundaries
 
 No Auth settings, staff invitations, live booking requests, notifications, remote restores or GoDaddy deployment occurred. No BiBiChik or other Supabase project was connected. Secrets, raw SQL diagnostics, backup payloads and the private execution ledger are not committed. Auth/site/email setup and live booking approval remain separate.
+
+## Approved read-only follow-up — PASS
+
+The syntax error was the bare column alias `day`, a PostgreSQL keyword that requires AS. It was replaced by explicit `AS service_date` in `supabase/verify_booking_closed.sql`. The standalone runner `scripts/verify-production-closed.mjs` performs only this SELECT-based BEGIN READ ONLY / ROLLBACK check and validates the existing execution evidence locally. The one-shot migration executor was not invoked.
+
+The follow-up completed on 2026-11-18 at 11:40:22 Asia/Kuala_Lumpur. All five public/area flags remain false; both seating categories return bookingOpen=false and zero slots; Monday returns closed=true. Catalog checks found six tables with RLS, 15 public RPCs, 24 exact reviewed function bodies, settings version 2 and one hours-initialization audit event. There are zero staff, bookings and outbox rows. These catalog facts corroborate the original execution record; catalogs alone do not count historical script invocations.
+
+The original record confirms one committed execution per migration and prior PASS for both prepared verification scripts. It was not overwritten. The separate owner-only follow-up evidence is `.backups/production-readonly-followup-oemwlqisfwrhfxsvuszi.json`. No database/configuration/user changes or invitations occurred. Production Admin onboarding is now the next unapproved stage.

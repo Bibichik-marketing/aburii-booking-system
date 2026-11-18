@@ -1,6 +1,8 @@
 ## Production execution status — 2026-11-18
 
-The owner-approved 001→002→003 sequence has now been committed once in the pinned Aburii project. Both required verification scripts passed. The executor stopped on an additional read-only summary syntax error (42601), without retry. See `PRODUCTION-MIGRATION-RESULT.md` for exact results. Do not execute the fresh-install sequence again. Auth/onboarding/deployment were not changed.
+**Database migration stage COMPLETE / PASS.** The owner-approved 001→002→003 sequence committed exactly once; both required verification scripts passed. A separately approved corrected read-only follow-up also passed, resolving the prior supplementary alias syntax error without rerunning migrations or changing data/settings. See `PRODUCTION-MIGRATION-RESULT.md`. Do not execute the fresh-install sequence again. Public bookings and both seating areas remain disabled; no Production staff account has been created.
+
+The next stage is the unapproved secure Admin onboarding plan in `PRODUCTION-AUTH-CHANGE-PLAN.md`. Production Auth/site/email settings and user creation/invitations require separate approval. The preparation notes below are historical where they describe pre-migration state.
 
 # Aburii Production Supabase preparation
 
