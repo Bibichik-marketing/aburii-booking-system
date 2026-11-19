@@ -62,7 +62,7 @@ history if necessary; never roll back the database by rerunning migrations.
 
 ## Package preparation
 
-Create a source ZIP from the tracked app/, lib/, public/, scripts/build.mjs,
+Create a source ZIP from the tracked app/, lib/, public/, scripts/build.mjs, scripts/start.mjs,
 package.json, package-lock.json, next.config.ts, next-env.d.ts and tsconfig.json only.
 Exclude .env*, .git, .next, node_modules, backups, local accounts, migrations and tools.
 Build on GoDaddy Linux rather than uploading the Mac node_modules directory.
@@ -70,3 +70,13 @@ Build on GoDaddy Linux rather than uploading the Mac node_modules directory.
 Official references checked 18 November 2026:
 - https://developer.godaddy.com/en/docs/api-users/hosting/app-requirements
 - https://developer.godaddy.com/en/docs/api-users/hosting/concepts
+
+## Preview diagnosis — 19 November 2026
+
+App b4q6pdkn1a deployed commit 5883900 on Node 22. Actual runtime logs showed
+Next 16.4.6 Ready on container hostname port 20010, while Preview returned a gateway
+error. Start now explicitly binds 0.0.0.0 and preserves platform PORT. Preview had
+zero configured custom secrets; all six required ABURII variables must be entered
+privately in Preview settings, with ABURII_SITE_URL set to its exact preview origin.
+Do not import .env.backup.local or provision the unrelated hosted MySQL database.
+No Supabase migrations, Auth changes or public booking flags are part of this fix.

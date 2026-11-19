@@ -9,7 +9,7 @@
   "scripts": {
     "dev": "next dev --port 3100",
     "build": "node scripts/build.mjs",
-    "start": "node .next/standalone/server.js",
+    "start": "node scripts/start.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node scripts/test-db.mjs",
     "notifications": "node scripts/notifications.mjs",
