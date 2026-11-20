@@ -72,6 +72,7 @@ try {
       "--test",
       "--test-concurrency=1",
       "tests/database.test.mjs",
+      "tests/runtime-port.test.mjs",
       "tests/staff-workspace.test.mjs",
       "tests/operating-hours.test.mjs",
       "tests/i18n.test.mjs",

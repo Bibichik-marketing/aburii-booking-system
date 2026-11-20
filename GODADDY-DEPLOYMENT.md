@@ -80,3 +80,23 @@ zero configured custom secrets; all six required ABURII variables must be entere
 privately in Preview settings, with ABURII_SITE_URL set to its exact preview origin.
 Do not import .env.backup.local or provision the unrelated hosted MySQL database.
 No Supabase migrations, Auth changes or public booking flags are part of this fix.
+
+## Preview command regression — 20 November 2026
+
+Actual Preview logs show npm run dev repeatedly executing next dev --port 3100,
+with EACCES on 0.0.0.0:3100. Published logs show npm start correctly listening
+on 0.0.0.0:20011. The dashboard now describes the source as Folder upload;
+a previously uploaded archive can therefore differ from GitHub main.
+
+Both npm run dev and npm start now use the assigned PORT and bind 0.0.0.0.
+Production refuses a missing or invalid PORT instead of silently choosing 3000.
+The fallback 3100 is limited to local, non-production invocations without PORT.
+The isolated local:start launcher remains unchanged.
+
+Use npm run build and npm start for a production-mode deployment. If GoDaddy runs
+npm run dev for Preview, it also respects the platform-assigned port now.
+Update Preview from GitHub main after pulling the new commit. If Update Preview
+requests a folder/ZIP, do not reuse the earlier source ZIP: regenerate from current
+tracked source, including scripts/dev.mjs, scripts/start.mjs and
+scripts/runtime-port.mjs. Never upload the project folder with private .env files.
+No Live update or publication is authorized by this repair.
