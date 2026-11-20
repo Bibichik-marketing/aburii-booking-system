@@ -1,4 +1,5 @@
 import "server-only";
+import { upstreamError } from "./upstream-errors.mjs";
 import { supabaseConfig, supabaseHeaders } from "./supabase-config.mjs";
 import { cookies } from "next/headers";
 import { createHmac } from "node:crypto";
@@ -6,6 +7,7 @@ export class ApiError extends Error {
   constructor(
     message: string,
     public status = 400,
+    public code?: string,
   ) {
     super(message);
   }
@@ -23,9 +25,12 @@ export const authRequest = (path: string, body: unknown) =>
 async function requestSupabase(path: string, body: unknown, mode: "staff" | "service" | "auth", token?: string, method?: string) {
   let config;
   try { config = supabaseConfig(); } catch {
-    throw new ApiError("Online reservations are not available yet. Please contact Aburii.", 503);
+    console.warn("aburii_request_failed", { stage: mode, code: "SERVER_CONFIGURATION" });
+    throw new ApiError("The server connection is not configured correctly. Please contact the administrator.", 503, "SERVER_CONFIGURATION");
   }
-  const response = await fetch(`${config.url}${path}`, {
+  let response: Response;
+  try {
+  response = await fetch(`${config.url}${path}`, {
     method: method || (body === undefined ? "GET" : "POST"),
     headers: supabaseHeaders(config, mode, token),
     ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -33,8 +38,18 @@ async function requestSupabase(path: string, body: unknown, mode: "staff" | "ser
     redirect: "error",
     signal: AbortSignal.timeout(15000),
   });
+  } catch {
+    console.warn("aburii_request_failed", { stage: mode, code: "UPSTREAM_NETWORK" });
+    throw new ApiError("Unable to reach the sign-in or booking service. Please try again later.", 503, "UPSTREAM_NETWORK");
+  }
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
+    const classified = upstreamError(mode, response.status, data);
+    if (classified) {
+      console.warn("aburii_request_failed", { stage: mode, status: response.status, code: classified.code });
+      throw new ApiError(classified.message, classified.status, classified.code);
+    }
+    console.warn("aburii_request_failed", { stage: mode, status: response.status, code: "UPSTREAM_API" });
     const known = [
       "No availability",
       "Booking expired",
@@ -135,6 +150,6 @@ export function reply(data: unknown, status = 200) {
 }
 export function failure(error: unknown) {
   if (error instanceof ApiError)
-    return reply({ error: error.message }, error.status);
+    return reply({ error: error.message, ...(error.code ? { code: error.code } : {}) }, error.status);
   return reply({ error: "Please check your details and try again." }, 400);
 }

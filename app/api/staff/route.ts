@@ -149,7 +149,7 @@ export async function POST(req: Request) {
       await limit(req, "login");
       const input = z
         .object({
-          email: z.string().email(),
+          email: z.string().trim().email(),
           password: z.string().min(1).max(200),
         })
         .parse(p);
